@@ -1,0 +1,6 @@
+-- DropIndex
+DROP INDEX IF EXISTS "Route_serviceRouteId_date_key";
+
+-- AlterTable
+ALTER TABLE "RouteTokenLog" ADD COLUMN "action" TEXT NOT NULL DEFAULT 'GENERATED',
+ADD COLUMN "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

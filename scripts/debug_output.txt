@@ -1,0 +1,6 @@
+Searching for all customers matching partial ID: c6afc10d
+Found 1 customers:
+
+Customer: Abish (e0fba386-c761-4377-b486-7c0cc6afc10d)
+Phone: +916381823698, Active: true, Cans: 3, Balance: 60
+Refunds: 0

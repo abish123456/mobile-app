@@ -1,0 +1,22 @@
+-- Insert 20 Delivery Boys
+INSERT INTO "DeliveryBoy" ("id", "name", "phone", "active", "updatedAt") VALUES
+('db_test_01', 'Arun', '9000000001', true, NOW()),
+('db_test_02', 'Bala Murugan', '9000000002', true, NOW()),
+('db_test_03', 'Chandru S', '9000000003', true, NOW()),
+('db_test_04', 'Dinesh Karthik', '9000000004', true, NOW()),
+('db_test_05', 'Elango V', '9000000005', true, NOW()),
+('db_test_06', 'Fahad Bazil', '9000000006', true, NOW()),
+('db_test_07', 'Ganesh Moorthy', '9000000007', true, NOW()),
+('db_test_08', 'Hari Krishnan', '9000000008', true, NOW()),
+('db_test_09', 'Imran Khan', '9000000009', true, NOW()),
+('db_test_10', 'Jay Surya', '9000000010', true, NOW()),
+('db_test_11', 'Karthik Raja', '9000000011', true, NOW()),
+('db_test_12', 'Lakshmi Narayanan', '9000000012', true, NOW()),
+('db_test_13', 'Mani Kandan', '9000000013', true, NOW()),
+('db_test_14', 'Naveen Kumar', '9000000014', true, NOW()),
+('db_test_15', 'Omprakash', '9000000015', true, NOW()),
+('db_test_16', 'Pradeep R', '9000000016', true, NOW()),
+('db_test_17', 'Qasim M', '9000000017', true, NOW()),
+('db_test_18', 'Ravi Chandran', '9000000018', true, NOW()),
+('db_test_19', 'Senthil Kumar', '9000000019', true, NOW()),
+('db_test_20', 'Thillai Natarajan', '9000000020', true, NOW());

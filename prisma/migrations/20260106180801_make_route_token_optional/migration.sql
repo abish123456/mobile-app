@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Route" ALTER COLUMN "token" DROP NOT NULL,
+ALTER COLUMN "tokenExpiresAt" DROP NOT NULL;
