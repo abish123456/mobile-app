@@ -246,13 +246,13 @@ export async function POST(req: NextRequest) {
       : `ord_${orderId}`;
 
     const razorpayOrder = await razorpay.orders.create({
-      amount: parseInt(String(order.amount), 10), // Ensure Amount is integer in paise (INR) from DB
+      amount: order.amount, // Amount in paise (INR) from DB
       currency: "INR",
       receipt: receipt.substring(0, 40), // Ensure max 40 chars
       notes: {
         orderId: orderId,
         customerId: order.customerId,
-        phone: customer.phone || "N/A",
+        phone: customer.phone,
         ...(paymentMethodId && paymentMethodId !== 'COD' ? { paymentMethodId: paymentMethodId } : {}),
       },
     });
@@ -292,12 +292,8 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Error creating Razorpay order:", error);
-    
-    // Extract actual Razorpay error description if available
-    const errorMessage = error?.error?.description || error?.message || "Failed to create payment order";
-    
     return NextResponse.json(
-      { success: false, message: errorMessage, errorDetails: error?.error || null },
+      { success: false, message: error.message || "Failed to create payment order" },
       { status: 500 }
     );
   }
