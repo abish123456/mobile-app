@@ -82,10 +82,20 @@ export async function GET(req: NextRequest) {
                     THEN 1 
                 END
             )::int as "orderCount",
+            COUNT(
+                CASE 
+                    WHEN o."id" IS NOT NULL
+                    AND o."status" != 'CANCELLED'
+                    AND NOT (o."paymentMethod" = 'ONLINE' AND o."paymentStatus" = 'PENDING')
+                    AND ro."sequence" = 0
+                    THEN 1 
+                END
+            )::int as "unoptimizedCount",
             COALESCE(rr."refundCount", 0)::int as "refundCount",
             r."createdAt",
             r."isSubmitted",
-            r."submittedAt"
+            r."submittedAt",
+            r."isAutoOptimized"
         FROM "Route" r
         INNER JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
         INNER JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
@@ -93,7 +103,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN "Order" o ON ro."orderId" = o."id"
         LEFT JOIN RouteRefunds rr ON sr.id = rr."serviceRouteId" 
         ${dateFilter}
-        GROUP BY r."id", r."date", r."serviceRouteId", sr."name", r."token", r."tokenExpiresAt", r."deliveryBoyId", db."name", r."createdAt", rr."refundCount", r."isSubmitted", r."submittedAt"
+        GROUP BY r."id", r."date", r."serviceRouteId", sr."name", r."token", r."tokenExpiresAt", r."deliveryBoyId", db."name", r."createdAt", rr."refundCount", r."isSubmitted", r."submittedAt", r."isAutoOptimized"
         HAVING COUNT(CASE WHEN o."id" IS NOT NULL AND NOT (o."paymentMethod" = 'ONLINE' AND o."paymentStatus" = 'PENDING') THEN 1 END) > 0 OR COALESCE(rr."refundCount", 0) > 0 OR r."token" IS NOT NULL
         ORDER BY r."date" DESC, r."createdAt" DESC`,
       queryParams

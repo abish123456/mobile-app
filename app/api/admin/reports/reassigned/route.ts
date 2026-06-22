@@ -45,7 +45,16 @@ export async function GET(req: NextRequest) {
         a."pincode" as "addressPincode",
         (SELECT COUNT(*) FROM "OrderActivityLog" al2 WHERE al2."orderId" = o."id" AND al2."action" = 'REASSIGNED') as "reassignmentCount",
         (SELECT MAX(al3."createdAt") FROM "OrderActivityLog" al3 WHERE al3."orderId" = o."id" AND al3."action" = 'REASSIGNED') as "lastReassignedAt",
-        (CURRENT_DATE - o."createdAt"::date) as "agingDays"
+        (SELECT ro."notDeliveredReason" FROM "RouteOrder" ro WHERE ro."orderId" = o."id" AND ro."deliveryStatus" = 'NOT_DELIVERED' AND ro."notDeliveredReason" IS NOT NULL ORDER BY ro."updatedAt" DESC LIMIT 1) as "lastFailedReason",
+        (SELECT db."name" FROM "RouteOrder" ro JOIN "Route" r ON ro."routeId" = r."id" JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id" WHERE ro."orderId" = o."id" AND ro."deliveryStatus" = 'NOT_DELIVERED' ORDER BY ro."updatedAt" DESC LIMIT 1) as "lastFailedBy",
+        (SELECT db."name" FROM "RouteOrder" ro JOIN "Route" r ON ro."routeId" = r."id" JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id" WHERE ro."orderId" = o."id" ORDER BY ro."createdAt" DESC LIMIT 1) as "currentDeliveryBoyName",
+        (
+          COALESCE(
+            (SELECT "updatedAt"::date FROM "RouteOrder" ro WHERE ro."orderId" = o."id" AND ro."deliveryStatus" = 'DELIVERED' LIMIT 1),
+            (SELECT ro."updatedAt"::date FROM "RouteOrder" ro JOIN "NotDeliveredReason" ndr ON ro."notDeliveredReason" = ndr."reason" WHERE ro."orderId" = o."id" AND ro."deliveryStatus" = 'NOT_DELIVERED' AND ndr."autoReassign" = false ORDER BY ro."updatedAt" DESC LIMIT 1),
+            CURRENT_DATE
+          ) - o."createdAt"::date
+        ) as "agingDays"
       FROM "Order" o
       JOIN "Customer" c ON o."customerId" = c."id"
       JOIN "Address" a ON o."addressId" = a."id"

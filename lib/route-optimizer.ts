@@ -1,5 +1,3 @@
-import { getOptimizedRoute } from './mappls';
-
 export interface Location {
     lat: number;
     lng: number;
@@ -11,7 +9,7 @@ export interface RouteStop extends Location {
 }
 
 /**
- * Calculates the Haversine distance between two points in km (Fallback)
+ * Calculates the Haversine distance between two points in km
  */
 export function calculateDistance(a: Location, b: Location): number {
     if (!a || !b || a.lat === undefined || a.lng === undefined || b.lat === undefined || b.lng === undefined) {
@@ -31,45 +29,53 @@ export function calculateDistance(a: Location, b: Location): number {
 }
 
 /**
- * Optimizes the route using actual driving distances from Mappls
+ * Optimizes the route using Mappls Trip Optimization API,
+ * with a fallback to Nearest Neighbor + 2-opt refinement.
  */
-export async function optimizeRoute(base: Location, orders: RouteStop[]): Promise<{
-    stops: RouteStop[],
-    distance?: string,
-    duration?: number
-}> {
-    if (orders.length <= 1) {
-        return { stops: orders };
-    }
-
-    try {
-        console.log(`Optimizing route for ${orders.length} orders using Mappls Cloud API...`);
-        const result = await getOptimizedRoute(base, orders);
-        
-        if (result && result.order) {
-            // Reorder the original orders array based on Mappls' optimized indices
-            const optimizedStops = result.order.map((idx: number) => orders[idx]);
-            return {
-                stops: optimizedStops,
-                distance: result.distance,
-                duration: result.duration
-            };
-        }
-        
-        throw new Error("No optimization results from Mappls");
-    } catch (error) {
-        console.warn("Mappls cloud optimization failed, falling back to local optimization:", error);
-        return { stops: optimizeRouteLocal(base, orders) };
-    }
-}
-
-/**
- * Local TSP solver using Haversine distance (Fallback)
- */
-function optimizeRouteLocal(base: Location, orders: RouteStop[]): RouteStop[] {
+export async function optimizeRoute(base: Location, orders: RouteStop[]): Promise<RouteStop[]> {
     if (orders.length <= 1) return orders;
 
-    // 1. Nearest Neighbor to get an initial path
+    const restKey = process.env.MAPPLS_TRIP_OPTIMIZATION_KEY;
+
+    // Try Mappls API if key is available and stop count is reasonable (under 100)
+    if (restKey && orders.length < 100) {
+        try {
+            const allPoints = [base, ...orders];
+            // Format: lng,lat;lng,lat
+            const coordsString = allPoints.map(p => `${p.lng},${p.lat}`).join(';');
+            
+            const url = `https://route.mappls.com/route/optimization/trip_optimization/driving/${coordsString}?access_token=${restKey}`;
+            
+            console.log(`[RouteOptimizer] Calling Mappls Trip Optimization API with ${allPoints.length} points...`);
+            const startTime = Date.now();
+            const res = await fetch(url);
+            
+            if (res.ok) {
+                const data = await res.json();
+                if (data.code === 'Ok' && data.waypoints && data.waypoints.length === allPoints.length) {
+                    console.log(`[RouteOptimizer] Mappls API Success! Optimization took ${Date.now() - startTime}ms`);
+                    // waypoints[i] contains waypoint_index indicating the optimized sequence
+                    const sortedOrders = [...orders].sort((a, b) => {
+                        const indexAInInput = orders.indexOf(a) + 1;
+                        const indexBInInput = orders.indexOf(b) + 1;
+                        const optimizedIndexA = data.waypoints[indexAInInput].waypoint_index;
+                        const optimizedIndexB = data.waypoints[indexBInInput].waypoint_index;
+                        return optimizedIndexA - optimizedIndexB;
+                    });
+                    
+                    return sortedOrders;
+                } else {
+                    console.warn(`[RouteOptimizer] Mappls API returned unexpected data:`, JSON.stringify(data));
+                }
+            } else {
+                console.warn(`Mappls API failed with status: ${res.status}. Falling back to local optimization.`);
+            }
+        } catch (error) {
+            console.error("Mappls optimization error, falling back to local:", error);
+        }
+    }
+
+    // FALLBACK: 1. Nearest Neighbor to get an initial path
     const route: RouteStop[] = [];
     let current: Location = base;
     let remaining = [...orders];
@@ -91,12 +97,11 @@ function optimizeRouteLocal(base: Location, orders: RouteStop[]): RouteStop[] {
         current = next;
     }
 
-    // 2. 2-opt refinement
-    return twoOptLocal(base, route);
+    // 2. 2-opt refinement to remove crossings and shorten total path
+    return twoOpt(base, route);
 }
 
-
-function totalDistanceLocal(base: Location, path: RouteStop[]): number {
+function totalDistance(base: Location, path: RouteStop[]): number {
     let dist = 0;
     let prev = base;
     for (const stop of path) {
@@ -106,11 +111,12 @@ function totalDistanceLocal(base: Location, path: RouteStop[]): number {
     return dist;
 }
 
-function twoOptLocal(base: Location, path: RouteStop[]): RouteStop[] {
+function twoOpt(base: Location, path: RouteStop[]): RouteStop[] {
     let improved = true;
     let bestPath = [...path];
-    let bestDistance = totalDistanceLocal(base, bestPath);
+    let bestDistance = totalDistance(base, bestPath);
 
+    // Limit iterations to prevent heavy load if many orders
     let iterations = 0;
     const maxIterations = 500;
 
@@ -126,7 +132,7 @@ function twoOptLocal(base: Location, path: RouteStop[]): RouteStop[] {
                     ...bestPath.slice(j + 1),
                 ];
 
-                const candidateDistance = totalDistanceLocal(base, candidate);
+                const candidateDistance = totalDistance(base, candidate);
                 if (candidateDistance + 0.0001 < bestDistance) {
                     bestDistance = candidateDistance;
                     bestPath = candidate;

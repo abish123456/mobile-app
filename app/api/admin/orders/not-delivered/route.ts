@@ -138,6 +138,9 @@ export async function GET(req: NextRequest) {
             productName: string;
             quantity: number;
             amount: number;
+            paymentMethod: string;
+            paymentStatus: string;
+            paymentInstrument: string | null;
             notDeliveredReason: string;
             deliveryBoyName: string;
             deliveryDate: Date;
@@ -171,6 +174,9 @@ export async function GET(req: NextRequest) {
                 ) as "productName",
                 o."quantity",
                 o."amount",
+                o."paymentMethod",
+                o."paymentStatus",
+                o."paymentInstrument",
                 (
                     SELECT ro_fail."notDeliveredReason"
                     FROM "RouteOrder" ro_fail
@@ -273,6 +279,9 @@ export async function GET(req: NextRequest) {
                     quantity: order.quantity,
                     amount: order.amount ? order.amount / 100 : 0,
                 },
+                paymentMethod: order.paymentMethod,
+                paymentStatus: order.paymentStatus,
+                paymentInstrument: order.paymentInstrument,
                 notDeliveredReason: reason,
                 lastDeliveryBoy: order.deliveryBoyName || 'Unassigned', // Current / Active
                 previousDeliveryBoy: previousDbName, // The one who failed or Unassigned

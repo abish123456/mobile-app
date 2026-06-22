@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchPlaces, reverseGeocode } from '@/lib/mappls';
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
@@ -7,48 +6,29 @@ export async function GET(request: NextRequest) {
     const lon = searchParams.get('lon');
     const query = searchParams.get('q');
 
+    let url = '';
+    if (query) {
+        url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`;
+    } else if (lat && lon) {
+        url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+    } else {
+        return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    }
+
     try {
-        if (query) {
-            const results = await searchPlaces(query);
-            if (!results || !Array.isArray(results)) {
-                return NextResponse.json([]);
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'WaterCanDeliveryApp/1.0',
+                'Referer': 'https://watercan-app.com'
             }
-            
-            const transformed = results.map((item: any) => ({
-                display_name: item.formattedAddress || item.placeAddress || item.formatted_address || '',
-                lat: (item.latitude || item.lat || 0).toString(),
-                lon: (item.longitude || item.lng || 0).toString(),
-                address: {
-                    road: item.street || item.poi || '',
-                    suburb: item.locality || item.subLocality || '',
-                    city: item.city || item.district || '',
-                    state: item.state || '',
-                    postcode: item.pincode || item.postCode || ''
-                }
-            }));
-            
-            return NextResponse.json(transformed);
-        } else if (lat && lon) {
-            const result = await reverseGeocode(parseFloat(lat), parseFloat(lon));
-            if (!result) {
-                return NextResponse.json({ error: 'Not found' }, { status: 404 });
-            }
-            
-            const transformed = {
-                display_name: result.formatted_address || result.formattedAddress || '',
-                address: {
-                    road: result.street || result.poi || '',
-                    suburb: result.locality || result.subLocality || '',
-                    city: result.city || result.district || '',
-                    state: result.state || '',
-                    postcode: result.pincode || result.postCode || ''
-                }
-            };
-            
-            return NextResponse.json(transformed);
-        } else {
-            return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+        });
+
+        if (!response.ok) {
+            throw new Error(`Nominatim API error: ${response.status} ${response.statusText}`);
         }
+
+        const data = await response.json();
+        return NextResponse.json(data);
     } catch (error: any) {
         console.error('Geocoding error:', error);
         return NextResponse.json({ error: error.message || 'Failed to fetch geocoding data' }, { status: 500 });

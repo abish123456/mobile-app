@@ -50,27 +50,26 @@ export async function POST(
         }
 
         // 3. Define Hub/Starting Location
+        // Fetch hub location from SystemConfig, fallback to first order's location if no hub is specified
+        const configRes = await query<{ value: string }>(
+            `SELECT value FROM "SystemConfig" WHERE key = $1`,
+            ['HUB_LOCATION']
+        );
         let baseLocation = {
             lat: pendingOrders[0].latitude!,
             lng: pendingOrders[0].longitude!
         };
-
-        const configRes = await query<{ value: string }>(
-            `SELECT "value" FROM "SystemConfig" WHERE "key" = $1`,
-            ['HUB_LOCATION']
-        );
-
         if (configRes.rows.length > 0) {
             try {
-                const hub = JSON.parse(configRes.rows[0].value);
-                if (hub.lat && hub.lng) {
+                const parsedLocation = JSON.parse(configRes.rows[0].value);
+                if (parsedLocation && parsedLocation.lat && parsedLocation.lng) {
                     baseLocation = {
-                        lat: Number(hub.lat),
-                        lng: Number(hub.lng)
+                        lat: parsedLocation.lat,
+                        lng: parsedLocation.lng
                     };
                 }
             } catch (e) {
-                console.error("Failed to parse HUB_LOCATION from DB", e);
+                console.error("Error parsing HUB_LOCATION from DB", e);
             }
         }
 
@@ -81,7 +80,11 @@ export async function POST(
             lng: o.longitude!
         }));
 
-        const { stops: optimizedStops, distance, duration } = await optimizeRoute(baseLocation, stops);
+        console.log(`[OptimizeAPI] Starting optimization for Route ${routeId}. Base Location: ${JSON.stringify(baseLocation)}. Total Stops: ${stops.length}`);
+
+        const optimizedStops = await optimizeRoute(baseLocation, stops);
+
+        console.log(`[OptimizeAPI] Optimization complete. Saving ${optimizedStops.length} stops to DB.`);
 
         // 5. Update sequences in DB
         await withTransaction(async (client) => {
@@ -91,14 +94,18 @@ export async function POST(
                     [i + 1, optimizedStops[i].id]
                 );
             }
+            
+            // Mark the route as auto-optimized
+            await client.query(
+                `UPDATE "Route" SET "isAutoOptimized" = true, "updatedAt" = NOW() WHERE "id" = $1`,
+                [routeId]
+            );
         });
 
         return NextResponse.json({
             success: true,
-            message: `Successfully optimised ${optimizedStops.length} orders.${distance ? ` Total distance: ${distance} km.` : ''}`,
-            count: optimizedStops.length,
-            distance: distance ? `${distance} km` : undefined,
-            duration: duration ? `${duration} mins` : undefined
+            message: `Successfully optimised ${optimizedStops.length} orders.`,
+            count: optimizedStops.length
         });
 
     } catch (error) {

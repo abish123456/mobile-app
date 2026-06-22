@@ -291,7 +291,6 @@ export async function GET(req: NextRequest) {
       longitude: number | null;
       notDeliveredReason: string | null;
       isQrPayment: boolean;
-      deliveryStatus: string | null;
     }>(
       `SELECT
         o."id",
@@ -358,7 +357,6 @@ export async function GET(req: NextRequest) {
         assign."deliveryBoyName",
         assign."routeName",
         ro_seq."sequence",
-        ro_seq."deliveryStatus",
         COALESCE(
           (SELECT 
             CASE 
@@ -392,8 +390,7 @@ export async function GET(req: NextRequest) {
           LIMIT 1
       ) assign ON true
       LEFT JOIN LATERAL (
-          SELECT COALESCE(ro_seq_inner."sequence", 0) as "sequence",
-                 ro_seq_inner."deliveryStatus"
+          SELECT COALESCE(ro_seq_inner."sequence", 0) as "sequence"
           FROM "RouteOrder" ro_seq_inner
           WHERE ro_seq_inner."orderId" = o."id"
           ${routeId ? `AND ro_seq_inner."routeId" = $${routeIdParamIndex}` : 'AND ro_seq_inner."deliveryStatus" != \'NOT_DELIVERED\''}
@@ -482,8 +479,7 @@ export async function GET(req: NextRequest) {
         sequence: order.sequence,
         dailyPosition: parseInt(String(order.dailyPosition || '0')),
         dailyTotal: parseInt(String(order.dailyTotal || '0')),
-        notDeliveredReason: order.notDeliveredReason,
-        deliveryStatus: order.deliveryStatus
+        notDeliveredReason: order.notDeliveredReason
       };
     });
 

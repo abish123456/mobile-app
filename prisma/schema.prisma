@@ -261,6 +261,7 @@ model Route {
   deliveryBoyId  String
   isSubmitted    Boolean         @default(false)
   submittedAt    DateTime?
+  isAutoOptimized Boolean        @default(false)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   serviceRouteId String

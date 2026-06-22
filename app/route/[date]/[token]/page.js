@@ -19,14 +19,10 @@ import {
   ExternalLink,
   Reply,
   User,
-  Map as MapIcon,
-  List
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import RouteMap from "@/components/app/RouteMap";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +42,6 @@ export default function DeliveryRoutePage() {
   const [error, setError] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   const [isUpdating, setIsUpdating] = useState(null);
-  const [ordersViewMode, setOrdersViewMode] = useState('list'); // 'list' or 'map'
 
   // For regular delivery status update
   const [showStatusSelectionDialog, setShowStatusSelectionDialog] = useState(false);
@@ -199,16 +194,15 @@ export default function DeliveryRoutePage() {
   }, [route, pendingDeliveryOrder]);
 
   const openInMaps = (address) => {
-    let url;
+    let query;
     if (address.latitude && address.longitude) {
-      url = `https://www.google.com/maps/search/?api=1&query=${address.latitude},${address.longitude}`;
+      query = `${address.latitude},${address.longitude}`;
     } else {
-      const query = encodeURIComponent(
+      query = encodeURIComponent(
         `${address.line1}, ${address.area || ""}, ${address.city}, ${address.pincode}`
       );
-      url = `https://www.google.com/maps/search/?api=1&query=${query}`;
     }
-    window.open(url, "_blank");
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
   };
 
   const handleCallClick = (target) => {
@@ -664,36 +658,10 @@ export default function DeliveryRoutePage() {
         </div>
       )}
 
-      {/* Orders List / Map View */}
+      {/* Orders List */}
       <div className="max-w-4xl mx-auto px-3 py-6 space-y-4">
-        {route.orders && route.orders.length > 0 && (
-          <div className="flex justify-between items-center bg-white p-2 rounded-lg border shadow-sm mb-4">
-            <h2 className="text-sm font-bold text-gray-700 px-2 uppercase tracking-wide">Delivery Route</h2>
-            <div className="flex bg-gray-100 p-1 rounded-md border">
-              <button
-                className={cn("px-4 py-1.5 text-xs font-bold rounded flex items-center gap-1.5 transition-colors", ordersViewMode === 'list' ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700")}
-                onClick={() => setOrdersViewMode('list')}
-              >
-                <List className="h-3.5 w-3.5" />
-                List
-              </button>
-              <button
-                className={cn("px-4 py-1.5 text-xs font-bold rounded flex items-center gap-1.5 transition-colors", ordersViewMode === 'map' ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700")}
-                onClick={() => setOrdersViewMode('map')}
-              >
-                <MapIcon className="h-3.5 w-3.5" />
-                Map
-              </button>
-            </div>
-          </div>
-        )}
-
-        {ordersViewMode === 'map' ? (
-          <div className="w-full bg-white p-2 rounded-xl shadow-sm border h-[70vh]">
-            <RouteMap orders={route.orders} height="h-full" />
-          </div>
-        ) : (
-          route.orders.map((order, index) => {
+        {route.orders
+          .map((order, index) => {
           const isDelivered = order.deliveryStatus === 'DELIVERED';
           const isNotDelivered = order.deliveryStatus === 'NOT_DELIVERED';
           const isCancelled = order.status === 'CANCELLED';
@@ -745,8 +713,10 @@ export default function DeliveryRoutePage() {
                           )}
                         </h3>
 
-                        <p className="text-xs text-gray-500 mt-1">Order #{order.orderNumber || order.id.slice(-8).toUpperCase()} • {order.address.pincode}</p>
-
+                        <div className="flex flex-col gap-0.5 mt-1">
+                          <p className="text-xs text-gray-500">Order #{order.orderNumber || order.id.slice(-8).toUpperCase()} • {order.address.pincode}</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Ordered on {new Date(order.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</p>
+                        </div>
                       </div>
                     </div>
 
@@ -771,7 +741,7 @@ export default function DeliveryRoutePage() {
                       {order.isReassigned && (
                         <div className="flex items-center justify-end gap-1 mt-1">
                           <Reply className="h-3 w-3 text-amber-500" />
-                          <span className="text-[10px] text-amber-600 font-bold uppercase tracking-tight">Re-assigned</span>
+                          <span className="text-[10px] text-amber-600 font-bold uppercase tracking-tight">Re-assigned {order.reassignedCount > 0 && `(${order.reassignedCount})`}</span>
                         </div>
                       )}
                     </div>
@@ -959,8 +929,7 @@ export default function DeliveryRoutePage() {
               </Card>
             </div>
           );
-        })
-      )}
+        })}
           {/* Modern Footer Summary */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-3 safe-area-bottom">
         <div className="max-w-4xl mx-auto">

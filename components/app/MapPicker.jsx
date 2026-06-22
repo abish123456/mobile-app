@@ -1,184 +1,91 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Button } from '../ui/button';
 import { Locate, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
+// Fix for Leaflet default icon issues in Next.js
+const fixLeafletIcons = () => {
+    if (typeof window === 'undefined') return;
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+    });
+};
+
+function LocationMarker({ position, onPositionChange }) {
+    const markerRef = useRef(null);
+
+    const map = useMapEvents({
+        click(e) {
+            onPositionChange(e.latlng);
+            map.flyTo(e.latlng, map.getZoom());
+        },
+    });
+
+    const eventHandlers = useMemo(
+        () => ({
+            dragend() {
+                const marker = markerRef.current;
+                if (marker != null) {
+                    onPositionChange(marker.getLatLng());
+                }
+            },
+        }),
+        [onPositionChange],
+    );
+
+    return position === null ? null : (
+        <Marker
+            draggable={true}
+            eventHandlers={eventHandlers}
+            position={position}
+            ref={markerRef}
+        />
+    );
+}
+
+// Component to recenter map when position changes programmatically
+function Recenter({ position }) {
+    const map = useMap();
+    useEffect(() => {
+        if (position) {
+            map.flyTo(position, map.getZoom());
+        }
+    }, [position, map]);
+    return null;
+}
+
 export default function MapPicker({ value, onChange }) {
     const [position, setPosition] = useState(value || { lat: 11.0168, lng: 76.9558 });
     const [isLocating, setIsLocating] = useState(false);
-    const [isSdkLoaded, setIsSdkLoaded] = useState(false);
-    
-    const mapContainerId = useRef(`mappls-map-${Math.random().toString(36).substr(2, 9)}`);
-    const mapRef = useRef(null);
-    const mapInstance = useRef(null);
-    const markerInstance = useRef(null);
-    const scriptLoadedRef = useRef(false);
 
-    // Sync internal state if value prop changes from outside
     useEffect(() => {
-        if (value && (value.lat !== position.lat || value.lng !== position.lng)) {
-            setPosition(value);
-            if (markerInstance.current) {
-                markerInstance.current.setPosition({ lat: value.lat, lng: value.lng });
-            }
-            if (mapInstance.current) {
-                if (mapInstance.current.flyTo) {
-                    mapInstance.current.flyTo({ center: [value.lng, value.lat], zoom: 15 });
-                } else if (mapInstance.current.setCenter) {
-                    mapInstance.current.setCenter([value.lng, value.lat]);
-                }
-            }
-        }
-    }, [value]);
+        fixLeafletIcons();
+    }, []);
 
+    // Important: Internal update that also notifies parent
     const handlePositionChange = (newPos) => {
         setPosition(newPos);
         if (onChange) {
-            onChange(newPos.lat, newPos.lng, newPos.fullData);
+            onChange(newPos.lat, newPos.lng);
         }
     };
 
-    const initMap = () => {
-        if (!window.mappls || mapInstance.current) return;
-
-        const container = document.getElementById(mapContainerId.current);
-        if (!container) {
-            console.warn("Map container element not found in DOM yet, retrying...");
-            setTimeout(initMap, 100);
-            return;
-        }
-
-        try {
-            console.log("Initializing Mappls Map on element:", mapContainerId.current);
-            
-            // Mappls v3 vector maps often use [lng, lat] like Mapbox
-            const mapOptions = {
-                center: [position.lat, position.lng],
-                zoom: 13,
-                zoomControl: true
-            };
-
-            mapInstance.current = new window.mappls.Map(container, mapOptions);
-            const map = mapInstance.current;
-
-            // Handle events safely
-            const on = (target, event, cb) => {
-                if (target.on) target.on(event, cb);
-                else if (target.addListener) target.addListener(event, cb);
-            };
-
-            on(map, 'load', () => {
-                console.log("Map Loaded");
-                
-                // We use basic marker since search plugin handles the search box external to map
-                markerInstance.current = new window.mappls.Marker({
-                    map: map,
-                    position: { lat: position.lat, lng: position.lng },
-                    draggable: true,
-                });
-
-                const marker = markerInstance.current;
-                const onEvent = (marker.on) ? 'on' : 'addListener';
-                marker[onEvent]('dragend', () => {
-                    const newPos = marker.getPosition();
-                    handlePositionChange({ lat: newPos.lat, lng: newPos.lng });
-                });
-
-                on(map, 'click', (e) => {
-                    let coords;
-                    if (e.lngLat && typeof e.lngLat.lat === 'number') coords = { lat: e.lngLat.lat, lng: e.lngLat.lng };
-                    else if (Array.isArray(e.lngLat)) coords = { lat: e.lngLat[1], lng: e.lngLat[0] };
-                    else if (e.latLng) coords = { lat: e.latLng.lat, lng: e.latLng.lng };
-
-                    if (coords) {
-                        handlePositionChange(coords);
-                        marker.setPosition(coords);
-                        if (map.flyTo) map.flyTo({ center: [coords.lng, coords.lat] });
-                    }
-                });
-
-                // Initialize Search Plugin on external input if available
-                const searchInput = document.getElementById("mappls-search-input");
-                if (window.mappls.search && searchInput) {
-                    new window.mappls.search(searchInput, { map: map }, function(data) {
-                        console.log("Search Plugin selected data:", data);
-                        if (data && data.length > 0) {
-                            const result = data[0];
-                            const coords = { lat: result.latitude || result.lat, lng: result.longitude || result.lon };
-                            if (coords.lat && coords.lng) {
-                                handlePositionChange({ lat: coords.lat, lng: coords.lng, fullData: result });
-                                marker.setPosition(coords);
-                                if (map.flyTo) map.flyTo({ center: [coords.lng, coords.lat], zoom: 15 });
-                            } else if (result.eLoc) {
-                                console.log("Missing coords, using pinMarker fallback for eLoc:", result.eLoc);
-                                if (window.mappls.pinMarker) {
-                                    const tempMarker = new window.mappls.pinMarker({
-                                        map: map,
-                                        pin: result.eLoc,
-                                        fitbounds: true
-                                    });
-                                    // Wait for map to fly to eLoc bounds
-                                    setTimeout(() => {
-                                        const newCenter = map.getCenter();
-                                        const newCoords = { lat: newCenter.lat, lng: newCenter.lng };
-                                        handlePositionChange({ lat: newCoords.lat, lng: newCoords.lng, fullData: result });
-                                        marker.setPosition(newCoords);
-                                        // Remove the temporary pin marker
-                                        try {
-                                            window.mappls.remove({map: map, layer: tempMarker});
-                                        } catch(e) {}
-                                    }, 1500);
-                                }
-                            }
-                        }
-                    });
-                }
-            });
-
-        } catch (error) {
-            console.error("Mappls Init Error:", error);
-        }
-    };
-
+    // Sync internal state if value prop changes from outside (e.g. city change or external reset)
     useEffect(() => {
-        if (scriptLoadedRef.current) return;
-        scriptLoadedRef.current = true;
-        
-        const loadMapplsSdk = async () => {
-            const sdkKey = process.env.NEXT_PUBLIC_MAPPLS_JS_KEY || '28d4a2155029222ef3928cbd14c886e6';
-            if (!sdkKey) return;
-
-            if (window.mappls && window.mappls.placePicker) {
-                setIsSdkLoaded(true);
-                setTimeout(initMap, 100);
-                return;
-            }
-
-            try {
-                const { mappls } = await import('mappls-web-maps');
-                const mapplsClassObject = new mappls();
-
-                // mappls-web-maps takes care of loading both the core SDK and the plugins
-                // based on the options passed.
-                mapplsClassObject.initialize(sdkKey, { map: true, plugins: ['search', 'pinMarker'] }, () => {
-                    setIsSdkLoaded(true);
-                    setTimeout(initMap, 100);
-                });
-            } catch (err) {
-                console.error("Failed to load mappls-web-maps:", err);
-            }
-        };
-
-        loadMapplsSdk();
-
-        return () => {
-            // Cleanup logic if needed
-        };
-    }, []);
+        if (value && (value.lat !== position.lat || value.lng !== position.lng)) {
+            setPosition(value);
+        }
+    }, [value]);
 
     const handleCurrentLocation = (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Prevent form submission if inside a form
         if (!navigator.geolocation) {
             toast.error('Geolocation is not supported by your browser');
             return;
@@ -190,22 +97,14 @@ export default function MapPicker({ value, onChange }) {
                 const { latitude, longitude } = pos.coords;
                 const newPos = { lat: latitude, lng: longitude };
                 handlePositionChange(newPos);
-                
-                if (markerInstance.current) {
-                    markerInstance.current.setPosition(newPos);
-                }
-                if (mapInstance.current) {
-                    if (mapInstance.current.flyTo) {
-                        mapInstance.current.flyTo({ center: [longitude, latitude], zoom: 15 });
-                    } else if (mapInstance.current.setCenter) {
-                        mapInstance.current.setCenter([longitude, latitude]);
-                    }
-                }
-                
                 setIsLocating(false);
                 toast.success('Location updated');
             },
             (error) => {
+                console.error('Geolocation error:', {
+                    code: error.code,
+                    message: error.message
+                });
                 let msg = 'Unable to retrieve your location';
                 if (error.code === 1) msg = 'Location permission denied';
                 else if (error.code === 2) msg = 'Location unavailable';
@@ -219,23 +118,29 @@ export default function MapPicker({ value, onChange }) {
 
     return (
         <div className="space-y-2">
-            <div className="h-[300px] w-full rounded-lg overflow-hidden border border-border/60 shadow-sm relative z-0 bg-muted/20">
-                {!isSdkLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        <span className="ml-2 text-sm text-muted-foreground">Loading Mappls...</span>
-                    </div>
-                )}
-                
-                <div id={mapContainerId.current} ref={mapRef} className="h-full w-full" />
+            <div className="h-[300px] w-full rounded-lg overflow-hidden border border-border/60 shadow-sm relative z-0">
+                <MapContainer
+                    center={position}
+                    zoom={13}
+                    scrollWheelZoom={false}
+                    style={{ height: '100%', width: '100%' }}
+                >
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <LocationMarker position={position} onPositionChange={handlePositionChange} />
+                    <Recenter position={position} />
+                </MapContainer>
 
+                {/* Current Location Button Overlay */}
                 <Button
                     type="button"
                     variant="secondary"
                     size="sm"
                     className="absolute top-2 right-2 z-[400] h-9 gap-2 shadow-md bg-background/90 backdrop-blur-sm hover:bg-background border transform transition-transform active:scale-95"
                     onClick={handleCurrentLocation}
-                    disabled={isLocating || !isSdkLoaded}
+                    disabled={isLocating}
                 >
                     {isLocating ? (
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />

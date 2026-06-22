@@ -323,22 +323,24 @@ export default function NotDeliveredPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-gray-50">
-                                        <TableHead>Order Id</TableHead>
-                                        <TableHead>Customer Info</TableHead>
-                                        <TableHead>Address</TableHead>
+                                        <TableHead className="w-[100px]">Order Id</TableHead>
+                                        <TableHead className="w-[150px]">Customer Info</TableHead>
+                                        <TableHead className="w-[220px]">Address</TableHead>
                                         {activeTab === 'pending' ? (
                                             <>
-                                                <TableHead>Order Date & Time</TableHead>
-                                                <TableHead>Failed Reason</TableHead>
-                                                <TableHead>Assigned To</TableHead>
-                                                <TableHead>Actions</TableHead>
+                                                <TableHead className="w-[180px]">Order Date & Time</TableHead>
+                                                <TableHead className="w-[220px]">Failed Reason</TableHead>
+                                                <TableHead className="w-[100px]">Payment</TableHead>
+                                                <TableHead className="w-[160px]">Assigned To</TableHead>
+                                                <TableHead className="w-[120px]">Actions</TableHead>
                                             </>
                                         ) : (
                                             <>
-                                                {/* <TableHead>Reassign Time</TableHead> */}
-                                                <TableHead>Last Assigned To</TableHead>
-                                                <TableHead>Now Assigned To</TableHead>
-                                                <TableHead>Delivery Status</TableHead>
+                                                <TableHead className="w-[180px]">Order Date & Time</TableHead>
+                                                <TableHead className="w-[100px]">Payment</TableHead>
+                                                <TableHead className="w-[180px]">Last Assigned To</TableHead>
+                                                <TableHead className="w-[180px]">Now Assigned To</TableHead>
+                                                <TableHead className="w-[140px]">Delivery Status</TableHead>
                                             </>
                                         )}
                                     </TableRow>
@@ -346,7 +348,7 @@ export default function NotDeliveredPage() {
                                 <TableBody>
                                     {paginatedOrders.map((order) => (
                                         <TableRow key={order.id}>
-                                            <TableCell className="align-top">
+                                            <TableCell className="align-middle w-[100px]">
                                                 <div className="font-bold text-sm">#{order.orderNumber || order.id.slice(-8).toUpperCase()}</div>
                                                 {/* <div className="text-[10px] opacity-70">ID: {order.id.slice(-8).toUpperCase()}</div> */}
                                                 {/* {activeTab === 'pending' && (
@@ -361,14 +363,14 @@ export default function NotDeliveredPage() {
                                                 )} */}
                                             </TableCell>
 
-                                            <TableCell className="align-top max-w-[150px] whitespace-normal break-words">
+                                            <TableCell className="align-middle w-[150px] whitespace-normal break-words">
                                                         <div className="font-medium text-sm">{order.customer.name}</div>
                                                         <div className="text-xs text-gray-500">{order.customer.phone}</div>
                                                         {/* <div className="text-xs text-gray-400 font-mono mt-0.5">
                                                             {order.customer.id.slice(-8).toUpperCase()}
                                                         </div> */}
                                                     </TableCell>
-                                                    <TableCell className="max-w-[200px] text-xs text-gray-600 align-top whitespace-normal break-words">
+                                                    <TableCell className="w-[220px] max-w-[220px] text-xs text-gray-600 align-middle whitespace-normal break-words">
                                                         <div className="space-y-1">
                                                             <p>{order.address.line1}</p>
                                                             <p>{order.address.area}</p>
@@ -378,12 +380,12 @@ export default function NotDeliveredPage() {
 
                                             {activeTab === 'pending' ? (
                                                 <>
-                                                    <TableCell className="align-top">
+                                                    <TableCell className="align-middle w-[180px]">
                                                         <div className="text-sm text-gray-900 font-medium">
                                                             {order.createdAt ? formatInTimeZone(new Date(order.createdAt), 'Asia/Kolkata', 'dd MMM yyyy, hh:mm a') : '-'}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="align-top max-w-[180px] whitespace-normal break-words">
+                                                    <TableCell className="align-middle w-[220px] max-w-[220px] whitespace-normal break-words">
                                                         <div className="text-gray-900 text-sm font-medium">
                                                             {order.notDeliveredReason}
                                                         </div>
@@ -392,13 +394,30 @@ export default function NotDeliveredPage() {
                                                             {order.deliveryDate ? formatInTimeZone(new Date(order.deliveryDate), 'Asia/Kolkata', 'dd MMM') : '-'}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="align-top">
+                                                    <TableCell className="align-middle w-[100px]">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="text-sm font-medium">
+                                                                {order.paymentInstrument ? order.paymentInstrument.toUpperCase() : order.paymentMethod}
+                                                            </div>
+                                                            <Badge 
+                                                                className={cn(
+                                                                    "w-fit text-[10px] uppercase font-bold px-1.5 py-0",
+                                                                    order.paymentStatus === 'SUCCESS' ? "bg-green-100 text-green-700 border-green-200" :
+                                                                    (order.paymentStatus === 'PENDING' || order.paymentStatus === 'COD') ? "bg-yellow-50 text-yellow-600 border-yellow-200" :
+                                                                    "bg-gray-100 text-gray-700 border-gray-200"
+                                                                )}
+                                                            >
+                                                                {order.paymentStatus === 'SUCCESS' ? 'PAID' : (order.paymentStatus === 'PENDING' || order.paymentStatus === 'COD') ? 'PENDING' : order.paymentStatus}
+                                                            </Badge>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="align-middle w-[160px]">
                                                         <div className="flex items-center gap-2 text-sm text-gray-700">
                                                             <User className="h-3 w-3 text-gray-400" />
                                                             {order.previousDeliveryBoy}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="align-top">
+                                                    <TableCell className="align-middle w-[120px]">
                                                         {!order.activeRouteId ? (
                                                             <div className="flex items-center text-xs text-gray-500 italic font-medium">
                                                                 <AlertCircle className="h-3 w-3 mr-1.5 shrink-0" />
@@ -423,18 +442,35 @@ export default function NotDeliveredPage() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    {/* <TableCell className="align-top">
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {order.reassignedAt ? formatInTimeZone(new Date(order.reassignedAt), 'Asia/Kolkata', 'dd MMM, hh:mm a') : '-'}
+                                                    <TableCell className="align-middle w-[180px]">
+                                                        <div className="text-sm text-gray-900 font-medium">
+                                                            {order.createdAt ? formatInTimeZone(new Date(order.createdAt), 'Asia/Kolkata', 'dd MMM yyyy, hh:mm a') : '-'}
                                                         </div>
-                                                    </TableCell> */}
-                                                    <TableCell className="align-top">
+                                                    </TableCell>
+                                                    <TableCell className="align-middle w-[100px]">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="text-sm font-medium">
+                                                                {order.paymentInstrument ? order.paymentInstrument.toUpperCase() : order.paymentMethod}
+                                                            </div>
+                                                            <Badge 
+                                                                className={cn(
+                                                                    "w-fit text-[10px] uppercase font-bold px-1.5 py-0",
+                                                                    order.paymentStatus === 'SUCCESS' ? "bg-green-100 text-green-700 border-green-200" :
+                                                                    (order.paymentStatus === 'PENDING' || order.paymentStatus === 'COD') ? "bg-yellow-50 text-yellow-600 border-yellow-200" :
+                                                                    "bg-gray-100 text-gray-700 border-gray-200"
+                                                                )}
+                                                            >
+                                                                {order.paymentStatus === 'SUCCESS' ? 'PAID' : (order.paymentStatus === 'PENDING' || order.paymentStatus === 'COD') ? 'PENDING' : order.paymentStatus}
+                                                            </Badge>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="align-middle w-[180px]">
                                                         <div className="flex items-center gap-2 text-sm text-gray-500">
                                                             <User className="h-3 w-3" />
                                                             {order.previousDeliveryBoy}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="align-top">
+                                                    <TableCell className="align-middle w-[180px]">
                                                         <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                                                             <User className="h-3 w-3 text-green-600" />
                                                             {order.lastDeliveryBoy}
@@ -443,7 +479,7 @@ export default function NotDeliveredPage() {
                                                             {order.deliveryDate ? formatInTimeZone(new Date(order.deliveryDate), 'Asia/Kolkata', 'dd MMM') : '-'}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="align-top">
+                                                    <TableCell className="align-middle w-[140px]">
                                                         <Badge 
                                                             variant={order.status === 'DELIVERED' ? 'success' : order.status === 'CANCELLED' ? 'destructive' : 'secondary'}
                                                             className={cn(

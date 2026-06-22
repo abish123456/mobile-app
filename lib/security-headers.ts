@@ -14,7 +14,7 @@ export const SECURITY_HEADERS = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   // Content Security Policy (can be customized per route)
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://checkout.razorpay.com https://*.mappls.com; style-src 'self' 'unsafe-inline' https://*.mappls.com; img-src 'self' data: blob: https: https://*.mappls.com; font-src 'self' data: https://*.mappls.com; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com https://*.mappls.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; child-src 'self' blob: https://api.razorpay.com https://checkout.razorpay.com; worker-src 'self' blob:;",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com; child-src 'self' https://api.razorpay.com https://checkout.razorpay.com;",
   // Permissions policy
   "Permissions-Policy":
     "camera=(), microphone=(), geolocation=(self), interest-cohort=()",

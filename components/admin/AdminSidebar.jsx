@@ -183,6 +183,11 @@ const menuItems = [
         url: '/admin/reports/cash-settlement',
         icon: Coins,
       },
+      {
+        title: 'Deposit Report',
+        url: '/admin/reports/deposit',
+        icon: IndianRupee,
+      },
     ]
   },
   {

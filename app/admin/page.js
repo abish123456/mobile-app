@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from '../../components/ui/badge';
 import DashboardStats from '../../components/admin/DashboardStats';
 import ReportStats from '../../components/admin/ReportStats';
+import PaymentOverviewStats from '../../components/admin/PaymentOverviewStats';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -61,7 +62,7 @@ export default function AdminDashboard() {
   const [leftGraphView, setLeftGraphView] = useState('route-delivery'); // 'route-delivery' or 'daily-payment'
   const views = [
     { id: 'delivery', title: 'Delivery Overview' },
-    { id: 'reports', title: 'Previous Day  Reports' }
+    { id: 'reports', title: 'Previous Day  Reports & Payment Overview' }
   ];
 
   const nextView = () => setCurrentView((prev) => (prev + 1) % views.length);
@@ -257,7 +258,10 @@ export default function AdminDashboard() {
       )}
 
       {currentView === 1 && (
-        <ReportStats stats={stats} isLoading={isLoading} />
+        <>
+          <ReportStats stats={stats} isLoading={isLoading} />
+          <PaymentOverviewStats stats={stats} isLoading={isLoading} />
+        </>
       )}
 
       {/* Graphs - Always Show */}

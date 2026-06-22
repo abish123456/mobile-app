@@ -24,6 +24,9 @@ const MapPicker = dynamic(() => import('./MapPicker'), {
 export default function AddressForm({ formData, onChange, onServiceAreasFetched, errors = {}, showDefaultToggle = true }) {
   const [serviceAreas, setServiceAreas] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [detectedAddress, setDetectedAddress] = useState('');
 
   useEffect(() => {
@@ -51,12 +54,74 @@ export default function AddressForm({ formData, onChange, onServiceAreasFetched,
     fetchServiceAreas();
   }, []);
 
-  // No longer using custom search; handled by Place Picker plugin
+  // Suggestions logic
+  useEffect(() => {
+    if (searchQuery.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
 
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await fetch(`/shop/api/geocode?q=${encodeURIComponent(searchQuery)}`);
+        const data = await response.json();
+        setSuggestions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Search error:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
 
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
+  const handleSelectSuggestion = (suggestion) => {
+    const lat = parseFloat(suggestion.lat);
+    const lng = parseFloat(suggestion.lon);
 
-  const handlePincodeChange = async (value) => {
+    console.log('Selected Suggestion Lat/Lng:', { lat, lng });
+
+    onChange('latitude', lat);
+    onChange('longitude', lng);
+    setSearchQuery('');
+    setSuggestions([]);
+    if (suggestion.display_name) {
+      setDetectedAddress(suggestion.display_name);
+    }
+
+    // Fill form fields from suggestion address
+    if (suggestion.address) {
+      const addr = suggestion.address;
+      const house = addr.house_number || '';
+      const building = addr.building || '';
+      const road = addr.road || '';
+      const suburb = addr.suburb || addr.neighbourhood || '';
+      const cityVal = addr.city || addr.town || addr.village || addr.county || '';
+      const pincodeVal = addr.postcode || '';
+
+      let line1 = [house, building, road].filter(Boolean).join(', ');
+      if (!line1 && suburb) line1 = suburb;
+
+      if (line1) onChange('addressLine1', line1);
+      if (cityVal) onChange('city', cityVal);
+
+      if (pincodeVal) {
+        onChange('pincode', pincodeVal);
+        onChange('coordinatePincode', pincodeVal);
+        const match = serviceAreas.find(sa => sa.pincode === pincodeVal);
+        if (match) {
+          onChange('area', match.areaName);
+        } else {
+          onChange('area', '');
+          toast('Location selected. Please check if Pincode is in our service area.', { icon: '📍' });
+        }
+      }
+    }
+  };
+
+  const handlePincodeChange = (value) => {
     onChange('pincode', value);
 
     // Auto-fill area and city based on selected pincode
@@ -66,25 +131,6 @@ export default function AddressForm({ formData, onChange, onServiceAreasFetched,
 
       if (!formData.city) {
         onChange('city', 'Coimbatore');
-      }
-
-      // Automatically move map to this pincode if no coordinates are set
-      if (!formData.latitude || !formData.longitude) {
-        try {
-          const response = await fetch(`/shop/api/geocode?q=${value}, Coimbatore`);
-          const data = await response.json();
-          if (data && data.length > 0) {
-            const newLat = parseFloat(data[0].lat);
-            const newLon = parseFloat(data[0].lon);
-            if (newLat && newLon && newLat !== 0 && newLon !== 0) {
-              onChange('latitude', newLat);
-              onChange('longitude', newLon);
-            }
-            setDetectedAddress(data[0].display_name);
-          }
-        } catch (err) {
-          console.error('Pincode geocoding error:', err);
-        }
       }
     }
   };
@@ -96,6 +142,7 @@ export default function AddressForm({ formData, onChange, onServiceAreasFetched,
 
       if (data && data.address) {
         if (data.display_name) {
+          // Display-only update: reflect pinned location without mutating form inputs
           setDetectedAddress(data.display_name);
         }
         const addr = data.address;
@@ -104,6 +151,7 @@ export default function AddressForm({ formData, onChange, onServiceAreasFetched,
         if (pincodeVal) {
           onChange('coordinatePincode', pincodeVal);
         } else {
+          // Keep address fields untouched; only clear coordinate-based pincode when unknown
           onChange('coordinatePincode', '');
         }
       } else {
@@ -264,12 +312,33 @@ export default function AddressForm({ formData, onChange, onServiceAreasFetched,
         </Label>
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="mappls-search-input"
-            placeholder="Search for your building, street or area..."
-            className="pl-9 pr-10"
-          />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search for your building, street or area..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-10"
+            />
+            {isSearching && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+
+          {suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-md shadow-lg z-[1001] max-h-[200px] overflow-y-auto">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  className="w-full text-left px-4 py-2 hover:bg-muted text-sm transition-colors border-b border-border last:border-0"
+                  onClick={() => handleSelectSuggestion(s)}
+                >
+                  <p className="font-medium truncate">{s.display_name.split(',')[0]}</p>
+                  <p className="text-xs text-muted-foreground truncate">{s.display_name.split(',').slice(1).join(',').trim()}</p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {(detectedAddress || (formData.addressLine1 && formData.city)) && (
@@ -288,38 +357,11 @@ export default function AddressForm({ formData, onChange, onServiceAreasFetched,
 
         <MapPicker
           value={formData.latitude && formData.longitude ? { lat: formData.latitude, lng: formData.longitude } : null}
-          onChange={(lat, lng, fullData) => {
-            console.log('Map Pin Lat/Lng/Data:', { lat, lng, fullData });
+          onChange={(lat, lng) => {
+            console.log('Map Pin Lat/Lng:', { lat, lng });
             onChange('latitude', lat);
             onChange('longitude', lng);
-            
-            if (fullData) {
-               // Handled Place Picker suggestion data
-               const addr = fullData;
-               const house = addr.houseNumber || addr.houseName || '';
-               const poi = addr.poi || '';
-               const street = addr.street || '';
-               const suburb = addr.subLocality || addr.locality || '';
-               const cityVal = addr.city || addr.district || '';
-               const pincodeVal = addr.pincode || '';
-               
-               let line1 = [house, poi, street].filter(Boolean).join(', ');
-               if (!line1 && suburb) line1 = suburb;
-               
-               if (line1 && !formData.addressLine1) onChange('addressLine1', line1);
-               
-               const detected = addr.formattedAddress || addr.placeAddress || addr.placeName || line1;
-               if (detected) {
-                 setDetectedAddress(detected);
-               }
-               
-               if (pincodeVal) {
-                 onChange('coordinatePincode', pincodeVal);
-               }
-            } else {
-               // Normal drag event without placePicker
-               fetchCoordinatePincode(lat, lng);
-            }
+            fetchCoordinatePincode(lat, lng);
           }}
         />
         {errors.latitude && <p className="text-xs text-destructive">Please pin your location on the map</p>}

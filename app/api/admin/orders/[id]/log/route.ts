@@ -243,6 +243,22 @@ export async function GET(
             [orderId]
         );
 
+        // 8. Fetch customer's cans in hand and deposit history
+        const customerRes = await query<{ cansInHand: number }>(
+            `SELECT "cansInHand" FROM "Customer" WHERE "id" = $1`,
+            [order.customerId]
+        );
+        const customerCansInHand = customerRes.rows[0]?.cansInHand || 0;
+
+        const depositHistoryRes = await query<{ createdAt: Date; amount: number; description: string; type: string }>(
+            `SELECT ("createdAt" AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC') as "createdAt", "amount", "description", "type"
+             FROM "WalletTransaction"
+             WHERE "customerId" = $1
+               AND ("referenceType" ILIKE '%DEPOSIT%' OR "description" ILIKE '%deposit%')
+             ORDER BY "createdAt" ASC`,
+            [order.customerId]
+        );
+
         // ── Build unified timeline ──
         const events: Array<{
             id: string;
@@ -294,7 +310,7 @@ export async function GET(
             if (pay.status === "SUCCESS") {
                 const instrumentLabel = (order as any).paymentInstrument ? `${(order as any).paymentInstrument.toUpperCase()} - ` : "";
                 const qrSuffix = order.isQrPayment ? " (via QR)" : "";
-                
+
                 let bankRrn = null;
                 let upiId = null;
                 let payerContact = null;
@@ -479,6 +495,10 @@ export async function GET(
         const deliveredRO = routeOrdersRes.rows.find(ro => ro.deliveryStatus === 'DELIVERED');
         const deliveredAt = deliveredRO ? deliveredRO.routeOrderUpdatedAt : null;
 
+        const notDeliveredROs = routeOrdersRes.rows.filter(ro => ro.deliveryStatus === 'NOT_DELIVERED' && ro.notDeliveredReason);
+        const lastFailedRO = notDeliveredROs.length > 0 ? notDeliveredROs[notDeliveredROs.length - 1] : null;
+        const lastFailedReason = lastFailedRO ? lastFailedRO.notDeliveredReason : null;
+
         return NextResponse.json({
             success: true,
             order: {
@@ -493,6 +513,7 @@ export async function GET(
                 initialDeliveryDate: initialDeliveryDateDisplay.toISOString(),
                 currentDeliveryDate: order.deliveryDate.toISOString(),
                 deliveredAt: deliveredAt ? deliveredAt.toISOString() : null,
+                lastFailedReason: lastFailedReason,
                 deliverySlot: order.deliverySlot,
                 status: order.status,
                 paymentStatus: order.paymentStatus,
@@ -505,6 +526,13 @@ export async function GET(
                     name: order.customerName || "Unknown",
                     phone: order.customerPhone,
                     internalId: (order as any).customerInternalId,
+                    cansInHand: customerCansInHand,
+                    depositHistory: depositHistoryRes.rows.map(tx => ({
+                        date: tx.createdAt.toISOString(),
+                        amount: tx.amount,
+                        description: tx.description,
+                        type: tx.type
+                    })),
                 },
                 address: {
                     line1: order.addressLine1,

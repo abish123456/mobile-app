@@ -33,7 +33,8 @@ import {
   TrendingUp,
   IndianRupee,
   ShieldCheck,
-  Briefcase
+  Briefcase,
+  Printer
 } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import toast from 'react-hot-toast';
@@ -120,163 +121,169 @@ export default function CashSettlementReportPage() {
     };
   }, [reportData]);
 
+  // Helper to generate the Excel worksheet
+  const getExcelSheet = () => {
+    const headers = [
+      'S.NO',
+      'DESCRIPTION',
+      'CASH SALES',
+      'CASH DEPOSIT',
+      'ONLINE PAYMENT',
+      'ONLINE DEPOSIT',
+      'QR PAYMENT',
+      'QR DEPOSIT',
+      'CASH IN HAND',
+      'TOTAL SALES'
+    ];
+
+    const isSameDate = isSameDay(startDate, endDate);
+    const dateLabel = isSameDate
+      ? `DATE : ${format(startDate, 'dd.MM.yyyy')}`
+      : `DATE RANGE : ${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`;
+
+    // Rows for Excel
+    const excelData = [
+      ['SABOLS FOOD INDIA PVT LTD', '', '', '', '', dateLabel, '', '', '', ''],
+      [], // spacing
+      headers
+    ];
+
+    // Add route rows
+    reportData.forEach((item, index) => {
+      const row = [
+        index + 1,
+        item.routeName || 'Unassigned',
+        Math.round(item.cashSales),
+        Math.round(item.cashDeposit || 0),
+        Math.round(item.officeGpay),
+        Math.round(item.officeGpayDeposit || 0),
+        Math.round(item.qrPayment),
+        Math.round(item.qrDeposit || 0),
+        Math.round(item.cashInHand),
+        Math.round(item.totalSales)
+      ];
+      excelData.push(row);
+    });
+
+    // Add Grand Total Row
+    const totalRow = [
+      '',
+      'TOTAL',
+      Math.round(grandTotals.cashSales),
+      Math.round(grandTotals.cashDeposit),
+      Math.round(grandTotals.officeGpay),
+      Math.round(grandTotals.officeGpayDeposit),
+      Math.round(grandTotals.qrPayment),
+      Math.round(grandTotals.qrDeposit),
+      Math.round(grandTotals.cashInHand),
+      Math.round(grandTotals.totalSales)
+    ];
+    excelData.push(totalRow);
+
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const headerRowIndex = 2;
+    const totalRowIndex = excelData.length - 1;
+
+    // Styling loop
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_address = { c: C, r: R };
+        const cell_ref = XLSX.utils.encode_cell(cell_address);
+        if (!ws[cell_ref]) continue;
+
+        // Default styling: Segoe UI, thin borders, centered/left alignments
+        ws[cell_ref].s = {
+          border: {
+            top: { style: 'thin', color: { rgb: 'D1D5DB' } },
+            bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
+            left: { style: 'thin', color: { rgb: 'D1D5DB' } },
+            right: { style: 'thin', color: { rgb: 'D1D5DB' } }
+          },
+          font: { sz: 10, name: 'Segoe UI', color: { rgb: '111827' } },
+          alignment: { vertical: 'center', horizontal: 'center' }
+        };
+
+        // Numbers align right or center depending on style
+        if ([2, 3, 4, 5, 6, 7, 8, 9].includes(C) && R >= headerRowIndex) {
+          ws[cell_ref].s.alignment.horizontal = 'right';
+          if (R > headerRowIndex) {
+            ws[cell_ref].z = '₹#,##0';
+          }
+        }
+
+        // Description aligns left
+        if (C === 1 && R >= headerRowIndex) {
+          ws[cell_ref].s.alignment.horizontal = 'left';
+        }
+
+        // 1. Report Title Row styling (Row 0)
+        if (R === 0) {
+          ws[cell_ref].s.font = { bold: true, sz: 12, name: 'Segoe UI', color: { rgb: '000000' } };
+          ws[cell_ref].s.border = {};
+          if (C === 0) {
+            ws[cell_ref].s.alignment = { horizontal: 'left', vertical: 'center' };
+          } else if (C === 5) {
+            ws[cell_ref].s.alignment = { horizontal: 'right', vertical: 'center' };
+          }
+        }
+
+        // 2. Spacing Row (Row 1)
+        if (R === 1) {
+          ws[cell_ref].s.border = {};
+        }
+
+        // 3. Table Header styling (Row 2)
+        if (R === headerRowIndex) {
+          ws[cell_ref].s.font = { bold: true, sz: 10, name: 'Segoe UI', color: { rgb: '000000' } };
+          ws[cell_ref].s.fill = { fgColor: { rgb: 'E5E7EB' } }; // Light grey background
+          ws[cell_ref].s.border = {
+            top: { style: 'medium', color: { rgb: '000000' } },
+            bottom: { style: 'medium', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: 'D1D5DB' } },
+            right: { style: 'thin', color: { rgb: 'D1D5DB' } }
+          };
+        }
+
+        // 4. Grand Total Row styling
+        if (R === totalRowIndex) {
+          ws[cell_ref].s.font = { bold: true, sz: 11, name: 'Segoe UI', color: { rgb: '000000' } };
+          ws[cell_ref].s.border = {
+            top: { style: 'medium', color: { rgb: '000000' } },
+            bottom: { style: 'double', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: 'D1D5DB' } },
+            right: { style: 'thin', color: { rgb: 'D1D5DB' } }
+          };
+        }
+      }
+    }
+
+    // Merge header columns for SABOLS title and Date label
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+      { s: { r: 0, c: 5 }, e: { r: 0, c: 9 } }
+    ];
+
+    // Auto-fit columns
+    const colWidths = headers.map((h, colIdx) => {
+      let maxLen = h.length;
+      excelData.forEach((row, rowIdx) => {
+        if (rowIdx > 1 && row[colIdx] !== undefined && row[colIdx] !== null) {
+          const len = String(row[colIdx]).length;
+          if (len > maxLen) maxLen = len;
+        }
+      });
+      return { wch: Math.max(maxLen + 4, 12) };
+    });
+    ws['!cols'] = colWidths;
+
+    return ws;
+  };
+
   // Export styled Excel sheet matching the reference image layout
   const downloadExcel = () => {
     try {
-      const headers = [
-        'S.NO',
-        'DESCRIPTION',
-        'CASH SALES',
-        'CASH DEPOSIT',
-        'ONLINE PAYMENT',
-        'ONLINE DEPOSIT',
-        'QR PAYMENT',
-        'QR DEPOSIT',
-        'CASH IN HAND',
-        'TOTAL SALES'
-      ];
-
-      const isSameDate = isSameDay(startDate, endDate);
-      const dateLabel = isSameDate
-        ? `DATE : ${format(startDate, 'dd.MM.yyyy')}`
-        : `DATE RANGE : ${format(startDate, 'dd.MM.yyyy')} - ${format(endDate, 'dd.MM.yyyy')}`;
-
-      // Rows for Excel
-      const excelData = [
-        ['SABOLS FOOD INDIA PVT LTD', '', '', '', '', dateLabel, '', '', '', ''],
-        [], // spacing
-        headers
-      ];
-
-      // Add route rows
-      reportData.forEach((item, index) => {
-        const row = [
-          index + 1,
-          item.routeName || 'Unassigned',
-          Math.round(item.cashSales),
-          Math.round(item.cashDeposit || 0),
-          Math.round(item.officeGpay),
-          Math.round(item.officeGpayDeposit || 0),
-          Math.round(item.qrPayment),
-          Math.round(item.qrDeposit || 0),
-          Math.round(item.cashInHand),
-          Math.round(item.totalSales)
-        ];
-        excelData.push(row);
-      });
-
-      // Add Grand Total Row
-      const totalRow = [
-        '',
-        'TOTAL',
-        Math.round(grandTotals.cashSales),
-        Math.round(grandTotals.cashDeposit),
-        Math.round(grandTotals.officeGpay),
-        Math.round(grandTotals.officeGpayDeposit),
-        Math.round(grandTotals.qrPayment),
-        Math.round(grandTotals.qrDeposit),
-        Math.round(grandTotals.cashInHand),
-        Math.round(grandTotals.totalSales)
-      ];
-      excelData.push(totalRow);
-
-      const ws = XLSX.utils.aoa_to_sheet(excelData);
-      const range = XLSX.utils.decode_range(ws['!ref']);
-      const headerRowIndex = 2;
-      const totalRowIndex = excelData.length - 1;
-
-      // Styling loop
-      for (let R = range.s.r; R <= range.e.r; ++R) {
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const cell_address = { c: C, r: R };
-          const cell_ref = XLSX.utils.encode_cell(cell_address);
-          if (!ws[cell_ref]) continue;
-
-          // Default styling: Segoe UI, thin borders, centered/left alignments
-          ws[cell_ref].s = {
-            border: {
-              top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              right: { style: 'thin', color: { rgb: 'D1D5DB' } }
-            },
-            font: { sz: 10, name: 'Segoe UI', color: { rgb: '111827' } },
-            alignment: { vertical: 'center', horizontal: 'center' }
-          };
-
-          // Numbers align right or center depending on style
-          if ([2, 3, 4, 5, 6, 7, 8, 9].includes(C) && R >= headerRowIndex) {
-            ws[cell_ref].s.alignment.horizontal = 'right';
-            if (R > headerRowIndex) {
-              ws[cell_ref].z = '₹#,##0';
-            }
-          }
-
-          // Description aligns left
-          if (C === 1 && R >= headerRowIndex) {
-            ws[cell_ref].s.alignment.horizontal = 'left';
-          }
-
-          // 1. Report Title Row styling (Row 0)
-          if (R === 0) {
-            ws[cell_ref].s.font = { bold: true, sz: 12, name: 'Segoe UI', color: { rgb: '000000' } };
-            ws[cell_ref].s.border = {};
-            if (C === 0) {
-              ws[cell_ref].s.alignment = { horizontal: 'left', vertical: 'center' };
-            } else if (C === 5) {
-              ws[cell_ref].s.alignment = { horizontal: 'right', vertical: 'center' };
-            }
-          }
-
-          // 2. Spacing Row (Row 1)
-          if (R === 1) {
-            ws[cell_ref].s.border = {};
-          }
-
-          // 3. Table Header styling (Row 2)
-          if (R === headerRowIndex) {
-            ws[cell_ref].s.font = { bold: true, sz: 10, name: 'Segoe UI', color: { rgb: '000000' } };
-            ws[cell_ref].s.fill = { fgColor: { rgb: 'E5E7EB' } }; // Light grey background
-            ws[cell_ref].s.border = {
-              top: { style: 'medium', color: { rgb: '000000' } },
-              bottom: { style: 'medium', color: { rgb: '000000' } },
-              left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              right: { style: 'thin', color: { rgb: 'D1D5DB' } }
-            };
-          }
-
-          // 4. Grand Total Row styling
-          if (R === totalRowIndex) {
-            ws[cell_ref].s.font = { bold: true, sz: 11, name: 'Segoe UI', color: { rgb: '000000' } };
-            ws[cell_ref].s.border = {
-              top: { style: 'medium', color: { rgb: '000000' } },
-              bottom: { style: 'double', color: { rgb: '000000' } },
-              left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-              right: { style: 'thin', color: { rgb: 'D1D5DB' } }
-            };
-          }
-        }
-      }
-
-      // Merge header columns for SABOLS title and Date label
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-        { s: { r: 0, c: 5 }, e: { r: 0, c: 9 } }
-      ];
-
-      // Auto-fit columns
-      const colWidths = headers.map((h, colIdx) => {
-        let maxLen = h.length;
-        excelData.forEach((row, rowIdx) => {
-          if (rowIdx > 1 && row[colIdx] !== undefined && row[colIdx] !== null) {
-            const len = String(row[colIdx]).length;
-            if (len > maxLen) maxLen = len;
-          }
-        });
-        return { wch: Math.max(maxLen + 4, 12) };
-      });
-      ws['!cols'] = colWidths;
-
+      const ws = getExcelSheet();
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Cash Settlement');
 
@@ -286,6 +293,64 @@ export default function CashSettlementReportPage() {
     } catch (err) {
       console.error('Download error:', err);
       toast.error('Failed to export Excel report');
+    }
+  };
+
+  const handlePrint = () => {
+    try {
+      const ws = getExcelSheet();
+      const htmlString = XLSX.utils.sheet_to_html(ws, { id: "report-table", editable: false });
+      
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      
+      const iframeDoc = iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(`
+        <html>
+          <head>
+            <title>SABOLS - Watercan Ordering System</title>
+            <style>
+              body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+              th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+              
+              /* Layout Adjustments */
+              tr:nth-child(1) td { border: none; font-size: 16px; font-weight: bold; }
+              tr:nth-child(1) td:last-child { text-align: right; }
+              tr:nth-child(2) td { border: none; height: 10px; }
+              tr:nth-child(3) td { font-weight: bold; background-color: #f3f4f6; text-align: center; border: 2px solid #ccc; }
+              tr:last-child td { font-weight: bold; border-top: 2px solid #ccc; border-bottom: 2px double #ccc; }
+              
+              /* Value Alignment */
+              td:nth-child(3), td:nth-child(4), td:nth-child(5), td:nth-child(6), 
+              td:nth-child(7), td:nth-child(8), td:nth-child(9), td:nth-child(10) {
+                text-align: right;
+              }
+              
+              @media print {
+                @page { size: portrait; margin: 10mm; }
+              }
+            </style>
+          </head>
+          <body>
+            ${htmlString}
+          </body>
+        </html>
+      `);
+      iframeDoc.close();
+      
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1000);
+      }, 500);
+    } catch (err) {
+      console.error('Print error:', err);
+      toast.error('Failed to generate print document');
     }
   };
 
@@ -300,17 +365,26 @@ export default function CashSettlementReportPage() {
           <p className="text-gray-500 mt-1">Reconcile route collections, can deposits, online sales, and net cash-in-hand figures.</p>
         </div>
         {!isLoading && reportData.length > 0 && (
-          <Button
-            onClick={downloadExcel}
-            className="bg-emerald-600 hover:bg-emerald-700 shadow-md transition-all hover:scale-[1.02] text-white gap-2 h-11 px-5"
-          >
-            <FileDown className="h-5 w-5" /> Export Excel
-          </Button>
+          <div className="flex gap-3 print:hidden">
+            <Button
+              onClick={handlePrint}
+              variant="outline"
+              className="border-blue-600 text-blue-600 hover:bg-blue-50 shadow-md transition-all hover:scale-[1.02] gap-2 h-11 px-5"
+            >
+              <Printer className="h-5 w-5" /> Print
+            </Button>
+            <Button
+              onClick={downloadExcel}
+              className="bg-emerald-600 hover:bg-emerald-700 shadow-md transition-all hover:scale-[1.02] text-white gap-2 h-11 px-5"
+            >
+              <FileDown className="h-5 w-5" /> Export Excel
+            </Button>
+          </div>
         )}
       </div>
     
       {/* Date Filtering Panel */}
-      <Card className="border-none shadow-sm bg-white/80 backdrop-blur-sm">
+      <Card className="border-none shadow-sm bg-white/80 backdrop-blur-sm print:hidden">
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="space-y-2">
@@ -459,6 +533,39 @@ export default function CashSettlementReportPage() {
           </div>
         </section>
       )}
+
+      {/* Print Styles */}
+      <style jsx global>{`
+        @media print {
+          aside, [data-sidebar="sidebar"], header, footer {
+            display: none !important;
+          }
+          main {
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            background: white !important;
+          }
+          body {
+            background: white !important;
+          }
+          table {
+            width: 100% !important;
+            break-inside: auto;
+          }
+          tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          thead {
+            display: table-header-group;
+          }
+          .overflow-hidden, .overflow-x-auto {
+            overflow: visible !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

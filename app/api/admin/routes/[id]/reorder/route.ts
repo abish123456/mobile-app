@@ -34,7 +34,7 @@ export async function POST(
                     `UPDATE "RouteOrder" 
            SET "sequence" = $1, "updatedAt" = NOW() 
            WHERE "routeId" = $2 AND "orderId" = $3`,
-                    [i, routeId, orderId]
+                    [i + 1, routeId, orderId]
                 );
             }
         });

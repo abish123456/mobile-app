@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
         // 3. Execution using Transaction
         const result = await withTransaction(async (client) => {
             let movedCount = 0;
+            const currentDate = new Date();
 
             for (const orderId of orderIds) {
                 // Check if the order is actually in the source route and is pending
@@ -73,15 +74,15 @@ export async function POST(req: NextRequest) {
                     // A. Update RouteOrder to the new route and reset sequence
                     await client.query(
                         `UPDATE "RouteOrder" 
-                         SET "routeId" = $1, "sequence" = 0, "updatedAt" = NOW() 
+                         SET "routeId" = $1, "sequence" = 0, "updatedAt" = $4 
                          WHERE "orderId" = $2 AND "routeId" = $3`,
-                        [targetRouteId, orderId, sourceRouteId]
+                        [targetRouteId, orderId, sourceRouteId, currentDate]
                     );
 
                     // B. Add Activity Log for the order
                     await client.query(
                         `INSERT INTO "OrderActivityLog" ("id", "orderId", "action", "description", "metadata", "createdAt")
-                         VALUES ($1, $2, $3, $4, $5, NOW())`,
+                         VALUES ($1, $2, $3, $4, $5, $6)`,
                         [
                             crypto.randomUUID(),
                             orderId,
@@ -93,15 +94,16 @@ export async function POST(req: NextRequest) {
                                 toRoute: targetRouteId,
                                 fromStaff: sourceStaff,
                                 toStaff: targetStaff
-                            })
+                            }),
+                            currentDate
                         ]
                     );
 
                     // C. Ensure Order status is CONFIRMED (in case it was PENDING)
                     await client.query(
-                        `UPDATE "Order" SET "status" = 'CONFIRMED', "updatedAt" = NOW() 
+                        `UPDATE "Order" SET "status" = 'CONFIRMED', "updatedAt" = $2 
                          WHERE "id" = $1 AND "status" = 'PENDING'`,
-                        [orderId]
+                        [orderId, currentDate]
                     );
 
                     movedCount++;

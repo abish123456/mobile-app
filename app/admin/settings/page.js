@@ -34,6 +34,8 @@ export default function SettingsPage() {
     const [isLoadingOffDays, setIsLoadingOffDays] = useState(true);
     const [isSavingOffDays, setIsSavingOffDays] = useState(false);
 
+
+
     useEffect(() => {
         fetchHolidays();
         fetchOffDays();
@@ -63,20 +65,18 @@ export default function SettingsPage() {
         try {
             const res = await adminFetch('/api/admin/settings');
             const data = await res.json();
-            if (data.success && data.configs) {
-                if (data.configs.HOLIDAY_WEEKDAYS) {
-                    const saved = data.configs.HOLIDAY_WEEKDAYS
-                        .split(',')
-                        .map((n) => parseInt(n.trim(), 10))
-                        .filter((n) => !isNaN(n) && n >= 0 && n <= 6);
-                    setOffDays(new Set(saved));
-                }
+            if (data.success && data.configs?.HOLIDAY_WEEKDAYS) {
+                const saved = data.configs.HOLIDAY_WEEKDAYS
+                    .split(',')
+                    .map((n) => parseInt(n.trim(), 10))
+                    .filter((n) => !isNaN(n) && n >= 0 && n <= 6);
+                setOffDays(new Set(saved));
             } else {
                 setOffDays(new Set());
             }
         } catch (err) {
-            console.error('Error fetching settings:', err);
-            toast.error('Network error loading settings');
+            console.error('Error fetching off-days:', err);
+            toast.error('Network error loading weekly off days');
         } finally {
             setIsLoadingOffDays(false);
         }
@@ -277,7 +277,7 @@ export default function SettingsPage() {
                         </CardContent>
                     </Card>
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-blue-800 mt-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-blue-800">
                         <Info className="h-5 w-5 shrink-0" />
                         <p className="text-xs leading-relaxed font-medium">
                             Orders scheduled for these days will automatically be rescheduled to the next available working day in the system.

@@ -1389,17 +1389,19 @@ export default function ReportsPage() {
                       </TableCell>
                       <TableCell className="align-top max-w-[250px] whitespace-normal break-words">
                         <div className="flex flex-col gap-2">
-                          {order.items && order.items.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {order.items.map((item, idx) => (
-                                <Badge key={item.id || idx} variant="secondary" className="text-xs font-normal">
-                                  {item.quantity}x {item.productName} • ₹{(item.price * item.quantity).toFixed(2)}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="font-medium text-sm">{order.productName}</span>
-                          )}
+                          <div className="flex flex-col gap-1.5">
+                            {order.items && order.items.length > 0 ? (
+                              order.items.map((item, idx) => (
+                                <div key={item.id || idx} className="text-[13px] font-semibold text-slate-800">
+                                  {item.productName} : {item.quantity}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-[13px] font-semibold text-slate-800">
+                                {order.productName} : {order.quantity}
+                              </div>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-600 mt-1">
                             Qty: <span className="font-semibold">{order.quantity}</span> | <span className="font-bold">₹{Math.round(Number(order.amount))}</span>
                           </div>

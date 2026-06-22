@@ -106,6 +106,7 @@ export async function GET(
         o."paymentStatus" as "orderPaymentStatus",
         o."paymentMethod" as "orderPaymentMethod",
         o."status" as "orderStatus",
+        o."createdAt" as "orderCreatedAt",
         c."id" as "customerId",
         c."name" as "customerName",
         c."phone" as "customerPhone",
@@ -127,6 +128,7 @@ export async function GET(
         ro."sequence",
         c."depositWalletBalance",
         o."isQrPayment",
+        (SELECT COUNT(*) FROM "OrderActivityLog" al WHERE al."orderId" = o."id" AND al."action" = 'REASSIGNED') as "reassignedCount",
         (
           EXISTS (SELECT 1 FROM "RouteOrder" ro_check WHERE ro_check."orderId" = o."id" AND ro_check."deliveryStatus" = 'NOT_DELIVERED')
           OR ((o."updatedAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date > (o."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date)
@@ -302,6 +304,7 @@ export async function GET(
         return {
           id: row.orderId,
           orderNumber: row.orderNumber,
+          createdAt: (row as any).orderCreatedAt,
           routeOrderId: row.routeOrderId,
           totalDepositCans,
           quantity: row.orderQuantity,
@@ -336,6 +339,7 @@ export async function GET(
           expectedCOD: expectedCODForThisOrder / 100,
           isQrPayment: (row as any).isQrPayment || false,
           isReassigned: (row as any).isReassignedHistory && !['NOT_DELIVERED', 'CANCELLED'].includes(row.orderStatus),
+          reassignedCount: Number((row as any).reassignedCount) || 0,
           items: orderItemsMap.get(row.orderId) || [],
         };
       });

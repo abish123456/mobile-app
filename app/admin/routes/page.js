@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+const MapPicker = dynamic(() => import('../../../components/app/MapPicker'), { ssr: false });
+const RouteMap = dynamic(() => import('../../../components/app/RouteMap'), { ssr: false });
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import {
@@ -17,7 +20,7 @@ import { Calendar } from '../../../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/popover';
 import { Alert, AlertDescription } from '../../../components/ui/alert';
 import { format } from 'date-fns';
-import { Route, Plus, CalendarIcon, Copy, CheckCircle2, Loader2, AlertCircle, Shuffle, ChevronLeft, ChevronRight, RefreshCcw, History, UserPlus, Edit, Truck, Search, Check, ChevronsUpDown, ChevronUp, ChevronDown, GripVertical, Map as MapIcon, List, MapPin, Save } from 'lucide-react';
+import { Route, Plus, CalendarIcon, Copy, CheckCircle2, Loader2, AlertCircle, Shuffle, ChevronLeft, ChevronRight, RefreshCcw, History, UserPlus, Edit, Truck, Search, Check, ChevronsUpDown, ChevronUp, ChevronDown, GripVertical, MapPin, List, MapIcon } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import toast from 'react-hot-toast';
 import { adminFetch } from '../../../lib/admin-api';
@@ -39,8 +42,6 @@ import {
   DialogTitle,
 } from '../../../components/ui/dialog';
 import { Label } from '../../../components/ui/label';
-import RouteMap from '../../../components/app/RouteMap';
-import MapPicker from '../../../components/app/MapPicker';
 
 export default function RoutesPage() {
   const router = useRouter();
@@ -88,14 +89,57 @@ export default function RoutesPage() {
   const [isRedistributing, setIsRedistributing] = useState(false);
   const [showRedistributeConfirm, setShowRedistributeConfirm] = useState(false);
   const [pendingTargetRouteId, setPendingTargetRouteId] = useState(null);
-  const [ordersViewMode, setOrdersViewMode] = useState('list'); // 'list' or 'map'
-  const [routeDistance, setRouteDistance] = useState(null);
+  const [ordersViewMode, setOrdersViewMode] = useState('list');
 
-  // Hub Location State
-  const [showHubLocationDialog, setShowHubLocationDialog] = useState(false);
-  const [hubLocation, setHubLocation] = useState({ lat: '', lng: '' });
-  const [isLoadingHub, setIsLoadingHub] = useState(true);
+  const [hubLocation, setHubLocation] = useState(null);
+  const [showHubDialog, setShowHubDialog] = useState(false);
   const [isSavingHub, setIsSavingHub] = useState(false);
+
+  const [showOptimizePrompt, setShowOptimizePrompt] = useState(false);
+  const [routeToOptimize, setRouteToOptimize] = useState(null);
+  const [isAutoOptimizing, setIsAutoOptimizing] = useState(false);
+
+  const fetchHubLocation = async () => {
+    try {
+      const res = await adminFetch('/api/admin/hub-location');
+      const data = await res.json();
+      if (data.success && data.location) {
+        setHubLocation(data.location);
+      } else {
+        setHubLocation({lat: 11.0168, lng: 76.9558}); 
+      }
+    } catch (err) {
+      console.error('Error fetching hub location:', err);
+    }
+  };
+
+  const saveHubLocation = async () => {
+    if (!hubLocation) return;
+    setIsSavingHub(true);
+    try {
+      const res = await adminFetch('/api/admin/hub-location', {
+        method: 'POST',
+        body: JSON.stringify(hubLocation)
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Hub location saved successfully');
+        setShowHubDialog(false);
+      } else {
+        toast.error('Failed to save hub location');
+      }
+    } catch (err) {
+      console.error('Error saving hub location:', err);
+      toast.error('Network error');
+    } finally {
+      setIsSavingHub(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHubLocation();
+  }, []);
+
 
   // Clear highlight after 10 seconds
   useEffect(() => {
@@ -122,63 +166,7 @@ export default function RoutesPage() {
   useEffect(() => {
     fetchDeliveryBoys();
     fetchConfig();
-    fetchHubLocation();
   }, []);
-
-  const fetchHubLocation = async () => {
-    setIsLoadingHub(true);
-    try {
-      const res = await adminFetch('/api/admin/settings');
-      const data = await res.json();
-      if (data.success && data.configs && data.configs.HUB_LOCATION) {
-        try {
-          const parsed = JSON.parse(data.configs.HUB_LOCATION);
-          if (parsed.lat && parsed.lng) {
-            setHubLocation(parsed);
-          }
-        } catch (e) {
-          console.error('Failed to parse HUB_LOCATION', e);
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching hub location:', err);
-    } finally {
-      setIsLoadingHub(false);
-    }
-  };
-
-  const handleSaveHubLocation = async (e) => {
-    e.preventDefault();
-    if (!hubLocation.lat || !hubLocation.lng) {
-      toast.error('Please select a valid location');
-      return;
-    }
-
-    setIsSavingHub(true);
-    try {
-      const res = await adminFetch('/api/admin/settings', {
-        method: 'POST',
-        body: JSON.stringify({
-          key: 'HUB_LOCATION', value: JSON.stringify({
-            lat: parseFloat(hubLocation.lat),
-            lng: parseFloat(hubLocation.lng)
-          })
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Hub location saved successfully');
-        setShowHubLocationDialog(false);
-      } else {
-        toast.error(data.message || 'Failed to save hub location');
-      }
-    } catch (err) {
-      console.error('Error saving hub location:', err);
-      toast.error('Network error. Please try again.');
-    } finally {
-      setIsSavingHub(false);
-    }
-  };
 
   const fetchConfig = async () => {
     try {
@@ -242,6 +230,7 @@ export default function RoutesPage() {
             // Daily route info (orders, tokens) - only if orders exist
             routeId: dailyMatch?.id || sr.dailyAssignment?.id, // Route table ID for token generation
             orderCount: dailyMatch?.orderCount || sr.unassignedOrderCount || 0,
+            unoptimizedCount: dailyMatch?.unoptimizedCount || 0,
             refundCount: dailyMatch?.refundCount || 0,
             token: dailyMatch?.token || null,
             tokenExpiresAt: dailyMatch?.tokenExpiresAt || null,
@@ -249,6 +238,7 @@ export default function RoutesPage() {
             date: dailyMatch?.date || dateStr,
             isSubmitted: dailyMatch?.isSubmitted || false,
             submittedAt: dailyMatch?.submittedAt || null,
+            isAutoOptimized: dailyMatch?.isAutoOptimized || false,
           };
         });
 
@@ -343,6 +333,13 @@ export default function RoutesPage() {
 
   // NOTE: Keeping generateToken largely same but needing minimal tweak to ensure we have an ID
   const generateToken = async (route) => {
+    // If there are unoptimized orders, OR if it has NEVER been auto-optimized (and has orders)
+    if ((route.unoptimizedCount > 0) || (route.orderCount > 0 && !route.isAutoOptimized)) {
+      setRouteToOptimize(route);
+      setShowOptimizePrompt(true);
+      return { success: false };
+    }
+
     let targetRouteId = route.routeId;
 
     // If no route record exists yet but staff is assigned (e.g., carried forward)
@@ -405,6 +402,37 @@ export default function RoutesPage() {
     }
   };
 
+  const handleConfirmOptimizeAndGenerate = async () => {
+    if (!routeToOptimize) return;
+    setIsAutoOptimizing(true);
+    try {
+      const response = await adminFetch(`/api/admin/routes/${routeToOptimize.routeId}/optimize`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(data.message || 'Route optimized successfully');
+        setShowOptimizePrompt(false);
+        // Now generate the token
+        const updatedRoute = { ...routeToOptimize, unoptimizedCount: 0, isAutoOptimized: true };
+        await generateToken(updatedRoute);
+        // We should also refresh the routes so the UI is updated with the latest unoptimizedCount!
+        fetchRoutes();
+      } else {
+        toast.error(data.message || 'Optimization failed');
+        setShowOptimizePrompt(false);
+      }
+    } catch (err) {
+      console.error('Error auto-optimizing:', err);
+      toast.error('Network error during optimization');
+      setShowOptimizePrompt(false);
+    } finally {
+      setIsAutoOptimizing(false);
+      setRouteToOptimize(null);
+    }
+  };
+
 
 
   const handleCopyLink = async (route) => {
@@ -441,7 +469,6 @@ export default function RoutesPage() {
     if (!route) return;
     setIsLoadingOrders(true);
     setOrdersDialogRoute(route);
-    setRouteDistance(null); // Reset distance
 
     try {
       let url = '';
@@ -558,6 +585,7 @@ export default function RoutesPage() {
         toast.success('Sort order saved successfully');
         setHasUnsavedSort(false);
         setInitialRouteOrders([...selectedRouteOrders]);
+        fetchRoutes(); // Update route list state
       } else {
         toast.error(data.message || 'Failed to save sort order');
       }
@@ -584,6 +612,7 @@ export default function RoutesPage() {
         // Refresh orders to see new sequence
         await fetchRouteOrders(ordersDialogRoute);
         setHasUnsavedSort(false);
+        fetchRoutes(); // Update route list state
       } else {
         toast.error(data.message || 'Optimisation failed');
       }
@@ -655,12 +684,14 @@ export default function RoutesPage() {
           <p className="text-muted-foreground">Manage delivery routes and assignments</p>
         </div>
         <div className="flex flex-col items-end gap-1">
+          
           <div className="flex items-center gap-4">
-            <Button variant="outline" className="border-solid font-medium text-primary hover:bg-primary/5 hover:text-primary border-primary/30 shadow-sm" onClick={() => setShowHubLocationDialog(true)}>
-              <MapPin className="h-4 w-4 mr-2" />
+            <Button variant="outline" onClick={() => setShowHubDialog(true)} className="gap-2 text-blue-500 border-blue-200 hover:bg-blue-50">
+              <MapPin className="h-4 w-4" />
               Set Hub Location
             </Button>
             <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+
               <PopoverTrigger asChild>
                 <Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal")}>
                   <CalendarIcon className="mr-2 h-4 w-4" />
@@ -1089,10 +1120,10 @@ export default function RoutesPage() {
                           {formatInTimeZone(new Date(log.generatedAt), 'Asia/Kolkata', 'MMM dd, yyyy hh:mm:ss a')}
                         </TableCell>
                         <TableCell className="text-xs">
-                          <Badge
-                            variant={log.action === 'SUBMITTED' ? 'default' : log.action === 'GENERATED' ? 'secondary' : 'outline'}
+                          <Badge 
+                            variant={log.action === 'SUBMITTED' ? 'default' : log.action === 'GENERATED' ? 'secondary' : 'outline'} 
                             className={cn(
-                              "text-[10px]",
+                              "text-[10px]", 
                               log.action === 'SUBMITTED' && "bg-green-600 hover:bg-green-600 text-white font-bold"
                             )}
                           >
@@ -1141,7 +1172,7 @@ export default function RoutesPage() {
       {/* View Orders Dialog */}
       <Dialog open={showOrdersDialog} onOpenChange={setShowOrdersDialog}>
         <DialogContent className="max-w-[80vw] sm:max-w-[80vw] w-[80vw] max-h-[90vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-4 border-b flex flex-row items-start justify-between">
+          <DialogHeader className="p-6 pb-4 border-b flex flex-row items-start justify-between pr-12">
             <div>
               <DialogTitle className="text-xl">Orders for {ordersDialogRoute?.name}</DialogTitle>
               <DialogDescription className="flex items-center gap-2 flex-wrap mt-1">
@@ -1155,27 +1186,28 @@ export default function RoutesPage() {
                 )}
               </DialogDescription>
             </div>
-
-            <div className="flex bg-slate-100 p-1 rounded-lg border mr-8">
-              <button
-                className={cn("px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-colors", ordersViewMode === 'list' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}
-                onClick={() => setOrdersViewMode('list')}
+            <div className="flex bg-slate-100 p-1 rounded-lg border shadow-sm mt-0 relative top-[-4px]">
+              <button 
+                onClick={() => setOrdersViewMode('list')} 
+                className={cn("flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all", ordersViewMode === 'list' ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}
               >
-                <List className="h-4 w-4" />
-                List
+                <List className="h-4 w-4" /> List
               </button>
-              <button
-                className={cn("px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 transition-colors", ordersViewMode === 'map' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}
-                onClick={() => setOrdersViewMode('map')}
+              <button 
+                onClick={() => setOrdersViewMode('map')} 
+                className={cn("flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all", ordersViewMode === 'map' ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}
               >
-                <MapIcon className="h-4 w-4" />
-                Map
+                <MapIcon className="h-4 w-4" /> Map
               </button>
             </div>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto p-0 pt-0 bg-slate-50/30">
-            {isLoadingOrders ? (
+            {ordersViewMode === 'map' ? (
+              <div className="p-6 h-[500px]">
+                <RouteMap hubLocation={hubLocation} orders={selectedRouteOrders} />
+              </div>
+            ) : isLoadingOrders ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
@@ -1183,12 +1215,8 @@ export default function RoutesPage() {
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <p>No orders found for this route.</p>
               </div>
-            ) : ordersViewMode === 'map' ? (
-              <div className="p-4 h-full min-h-[500px]">
-                <RouteMap orders={selectedRouteOrders} height="h-[60vh]" onRouteCalculated={setRouteDistance} />
-              </div>
             ) : (
-              <div className="overflow-x-auto bg-white">
+              <div className="overflow-x-auto">
                 <Table className="min-w-[1200px]">
                   <TableHeader className="bg-slate-50">
                     <TableRow>
@@ -1209,9 +1237,9 @@ export default function RoutesPage() {
                       </TableHead>
                       <TableHead className="font-semibold text-slate-900 h-11 w-[110px]">Order Info</TableHead>
                       <TableHead className="font-semibold text-slate-900 h-11 w-[170px]">Customer</TableHead>
-                      <TableHead className="font-semibold text-slate-900 h-11 w-[330px]">Address</TableHead>
-                      <TableHead className="font-semibold text-slate-900 h-11 w-[350px]">Product Details</TableHead>
-                      <TableHead className="font-semibold text-slate-900 h-11 w-[120px] text-center">Payment Type</TableHead>
+                      <TableHead className="font-semibold text-slate-900 h-11 w-[350px]">Address</TableHead>
+                      <TableHead className="font-semibold text-slate-900 h-11 w-[150px]">Product Details</TableHead>
+                      <TableHead className="font-semibold text-slate-900 h-11 w-[170px] text-center">Payment Type</TableHead>
                       <TableHead className="font-semibold text-slate-900 h-11 w-[140px]">Staff / Route</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1282,7 +1310,7 @@ export default function RoutesPage() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="align-top py-4 max-w-[330px] whitespace-normal">
+                          <TableCell className="align-top py-4 max-w-[350px] whitespace-normal">
                             <div className="flex flex-col gap-0.5 text-[13px] text-slate-500 break-words">
                               <span className="font-medium leading-tight">{order.address.line1}</span>
                               {order.address.line2 && <span className="leading-tight">{order.address.line2}</span>}
@@ -1292,26 +1320,19 @@ export default function RoutesPage() {
                               <span className="leading-tight">{order.address.area}, {order.address.city} - {order.address.pincode}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="align-top py-4 max-w-[300px] whitespace-normal">
+                          <TableCell className="align-top py-4 max-w-[150px] whitespace-normal">
                             <div className="flex flex-col gap-3">
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex flex-col gap-1.5">
                                 {order.items && order.items.length > 0 ? (
                                   order.items.map((item, idx) => (
-                                    <Badge
-                                      key={idx}
-                                      variant="secondary"
-                                      className="bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-100 font-medium text-[12px] px-2 py-0.5 h-auto rounded-md whitespace-normal break-words text-left"
-                                    >
-                                      {item.quantity}x {item.productName} • ₹{item.price}
-                                    </Badge>
+                                    <div key={idx} className="text-[13px] font-semibold text-slate-800">
+                                      {item.productName} : {item.quantity}
+                                    </div>
                                   ))
                                 ) : (
-                                  <Badge
-                                    variant="secondary"
-                                    className="bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-100 font-medium text-[12px] px-2 py-0.5 h-auto rounded-md"
-                                  >
-                                    {order.quantity}x {order.productName || 'Water Can'} • ₹{order.amount}
-                                  </Badge>
+                                  <div className="text-[13px] font-semibold text-slate-800">
+                                    {order.productName || 'Water Can'} : {order.quantity}
+                                  </div>
                                 )}
                               </div>
                               <div className="text-[13px] font-medium text-slate-500">
@@ -1447,46 +1468,59 @@ export default function RoutesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Hub Location Dialog */}
-      <Dialog open={showHubLocationDialog} onOpenChange={setShowHubLocationDialog}>
-        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden bg-white">
-          <DialogHeader className="p-6 pb-4 border-b">
-            <DialogTitle className="text-xl flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
+      <Dialog open={showHubDialog} onOpenChange={setShowHubDialog}>
+        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <MapPin className="h-5 w-5 text-blue-500" />
               Shop / Hub Location
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-muted-foreground mt-1 text-sm">
               Set the starting and ending point for route optimization.
             </DialogDescription>
           </DialogHeader>
-          <div className="p-6 bg-slate-50">
-            {isLoadingHub ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <form onSubmit={handleSaveHubLocation} className="space-y-4">
-                <div className="border-2 rounded-xl overflow-hidden p-1 bg-white">
-                  <MapPicker
-                    value={hubLocation.lat ? { lat: Number(hubLocation.lat), lng: Number(hubLocation.lng) } : null}
-                    onChange={(lat, lng) => setHubLocation({ lat, lng })}
+          <div className="w-full relative px-6 py-2">
+            <div className="w-full rounded-md overflow-hidden border shadow-inner relative">
+               {hubLocation && (
+                  <MapPicker 
+                     value={hubLocation} 
+                     onChange={(lat, lng) => setHubLocation({lat, lng})} 
                   />
-                </div>
-                <div className="flex justify-end pt-4">
-                  <Button type="button" variant="outline" className="mr-3" onClick={() => setShowHubLocationDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSavingHub} className="min-w-[120px]">
-                    {isSavingHub ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save Location
-                  </Button>
-                </div>
-              </form>
-            )}
+               )}
+            </div>
           </div>
+          <DialogFooter className="p-4 border-t bg-slate-50/50 mt-2">
+            <Button variant="outline" onClick={() => setShowHubDialog(false)}>Cancel</Button>
+            <Button 
+               className="bg-[#0095B6] hover:bg-[#007b99] text-white" 
+               onClick={saveHubLocation}
+               disabled={isSavingHub}
+            >
+               {isSavingHub ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+               Save Location
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showOptimizePrompt} onOpenChange={setShowOptimizePrompt}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Auto-Optimize Route?</DialogTitle>
+            <DialogDescription>
+              <strong>{routeToOptimize?.name}</strong> has <strong>{routeToOptimize?.unoptimizedCount}</strong> unoptimized order(s).
+              Would you like to automatically optimize the path before generating the link?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOptimizePrompt(false)} disabled={isAutoOptimizing}>Cancel</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmOptimizeAndGenerate} disabled={isAutoOptimizing}>
+              {isAutoOptimizing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Shuffle className="h-4 w-4 mr-2" />}
+              Optimize & Generate
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div >
   );
 }
-

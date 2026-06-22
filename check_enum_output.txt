@@ -1,0 +1,22 @@
+﻿[dotenv@17.2.3] injecting env (2) from .env -- tip: ≡ƒôí add observability to secrets: https://dotenvx.com/ops
+ReturnCanRequest statuses: []
+ReturnRequestStatus enum labels: [
+  {
+    "enumlabel": "REQUESTED"
+  },
+  {
+    "enumlabel": "APPROVED"
+  },
+  {
+    "enumlabel": "ASSIGNED"
+  },
+  {
+    "enumlabel": "COLLECTED"
+  },
+  {
+    "enumlabel": "REFUNDED"
+  },
+  {
+    "enumlabel": "REJECTED"
+  }
+]

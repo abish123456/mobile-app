@@ -168,148 +168,9 @@ function TimelineEvent({ event, isLast }) {
 }
 
 function OrderSummaryCard({ order }) {
-  const statusClass = STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-800';
-  const payClass = PAYMENT_STATUS_COLORS[order.paymentStatus] || 'bg-gray-100 text-gray-800';
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showEmptyCans, setShowEmptyCans] = useState(false);
 
-  return (
-    <Card className="border-2 border-blue-100 shadow-sm">
-      <CardHeader className="py-2.5 border-b border-gray-100 bg-blue-50/10">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-xl font-bold flex items-center gap-2">
-              Order Details
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                {order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`}
-              </Badge>
-            </CardTitle>
-            <p className="text-xs text-gray-400 mt-1 font-mono">Internal ID : {order.id}</p>
-          </div>
-            <div className="flex flex-col items-end gap-1">
-              <div className="flex gap-2 flex-wrap">
-                <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${statusClass}`}>
-                  {order.status.replace(/_/g, ' ')}
-                </span>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-1">
-                    <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${payClass}`}>
-                      {order.paymentMethod === 'COD' ? 'COD' : `${order.paymentStatus} — ${order.paymentInstrument?.toUpperCase() || order.paymentMethod}`}
-                    </span>
-                    {order.isQrPayment && (
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] font-bold h-6">
-                        QR PAID
-                      </Badge>
-                    )}
-                  </div>
-                  {order.bankRrn && (
-                    <p className="text-[10px] text-gray-500 font-mono">RRN: {order.bankRrn}</p>
-                  )}
-                  {order.upiId && (
-                    <p className="text-[10px] text-gray-500 font-mono">UPI: {order.upiId}</p>
-                  )}
-                  {order.payerContact && (
-                    <p className="text-[10px] text-gray-500 font-mono">Payer: {order.payerContact}</p>
-                  )}
-                </div>
-              </div>
-            {order.status === 'DELIVERED' && order.deliveredAt && (
-              <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
-                <CheckCircle2 className="h-3 w-3" />
-                Delivered on {fmtDateTime(order.deliveredAt)}
-              </p>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      
-      <CardContent className="pt-3 space-y-4">
-        {/* Customer Information */}
-        <section className="space-y-2">
-          <h3 className="text-[11px] font-bold flex items-center gap-2 text-gray-500 uppercase tracking-widest">
-            <User className="h-4 w-4 text-blue-600" />
-            Customer Information
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 pl-6">
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Customer ID:</p>
-              <p className="font-medium text-gray-900">{order.customer.internalId?.slice(-8).toUpperCase() || order.customer.id.slice(-8).toUpperCase()}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Name:</p>
-              <p className="font-medium text-gray-900">{order.customer.name}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Phone:</p>
-              <p className="font-medium text-gray-900">{order.customer.phone}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Contact Person:</p>
-              <p className="font-medium font-bold">{order.address.contactName || '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Contact Number:</p>
-              <p className="font-medium font-bold">{order.address.contactPhone || '—'}</p>
-            </div>
-          </div>
-        </section>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-0">
-          {/* Delivery Address */}
-          <section className="space-y-2">
-            <h3 className="text-[11px] font-bold flex items-center gap-2 text-gray-500 uppercase tracking-widest">
-              <MapPin className="h-4 w-4 text-blue-600" />
-              Delivery Address
-            </h3>
-            <div className="pl-6 space-y-3">
-              <div className="flex items-start gap-2">
-                <p className="font-medium text-gray-800 flex-1">
-                  {order.address.line1}{order.address.line2 ? `, ${order.address.line2}` : ''}
-                </p>
-              </div>
-              <p className="text-sm text-gray-500">{order.address.area}, {order.address.city} - {order.address.pincode}</p>
-              {order.address.landmark && <p className="text-xs text-gray-400 italic">Landmark: {order.address.landmark}</p>}
-            </div>
-          </section>
-
-          {/* Delivery Information */}
-          <section className="space-y-2">
-            <h3 className="text-[11px] font-bold flex items-center gap-2 text-gray-500 uppercase tracking-widest">
-              <CalendarIcon className="h-4 w-4 text-blue-600" />
-              Delivery Information
-            </h3>
-            <div className="grid grid-cols-2 gap-y-4 pl-6">
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Order Date
-                </p>
-                <p className="text-sm font-bold text-gray-800">{fmtDate(order.createdAt)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Order Time
-                </p>
-                <p className="text-sm font-bold text-gray-800">{fmtTime(order.createdAt)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
-                  <Truck className="h-3 w-3" /> Delivery Date
-                </p>
-                <p className="text-sm font-bold text-gray-800">{fmtDate(order.deliveryDate)} (Expected)</p>
-              </div>
-              
-            </div>
-          </section>
-        </div>
-      </CardContent>
-      
-      <div className="px-6 py-1.5 bg-gray-50/50 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400">
-        <span>Last Updated: {fmtDateTime(order.updatedAt)}</span>
-        
-      </div>
-    </Card>
-  );
-}
-
-function OrderBreakdownCard({ order }) {
   // Calculate breakdown if items exist
   const hasItems = order.items && order.items.length > 0;
   let subtotal = 0;
@@ -329,69 +190,238 @@ function OrderBreakdownCard({ order }) {
   }
 
   return (
-    <Card className="border-2 border-blue-50 shadow-md">
-      <CardHeader className="py-2.5 border-b border-gray-100 bg-gray-50/50">
-        <CardTitle className="text-[11px] font-bold flex items-center gap-2 text-gray-500 uppercase tracking-widest">
-          <Package className="h-4 w-4 text-blue-600" />
-          Order Breakdown
-        </CardTitle>
+    <Card className="border-2 border-blue-100 shadow-sm flex flex-col h-[580px] lg:h-[640px]">
+      <CardHeader className="py-2.5 border-b border-gray-100 bg-blue-50/10">
+        <div>
+          <CardTitle className="text-xl font-bold flex items-center gap-2">
+            Order Details
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              {order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`}
+            </Badge>
+          </CardTitle>
+          <p className="text-xs text-gray-400 mt-1 font-mono">Internal ID : {order.id}</p>
+        </div>
       </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-6 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Product</th>
-                <th className="text-center px-6 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Qty</th>
-                <th className="text-right px-6 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Price</th>
-                <th className="text-right px-6 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 bg-white">
-              {hasItems ? (
-                order.items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-2 font-medium text-gray-800">{item.productName}</td>
-                    <td className="px-6 py-2 text-center text-gray-600 font-mono">{item.quantity}</td>
-                    <td className="px-6 py-2 text-right text-gray-600 font-mono">₹{item.price.toFixed(2)}</td>
-                    <td className="px-6 py-2 text-right font-semibold text-gray-900 font-mono">₹{(item.price * item.quantity).toFixed(2)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-2 font-medium text-gray-800">{order.productName}</td>
-                  <td className="px-6 py-2 text-center text-gray-600 font-mono">{order.quantity}</td>
-                  <td className="px-6 py-2 text-right text-gray-600 font-mono">₹{(subtotal / (order.quantity || 1)).toFixed(2)}</td>
-                  <td className="px-6 py-2 text-right font-semibold text-gray-900 font-mono">₹{subtotal.toFixed(2)}</td>
-                </tr>
+      
+      <CardContent className="pt-3 flex-1 flex flex-col overflow-y-auto custom-scrollbar-light">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+          {/* Left Column */}
+          <div className="space-y-6">
+            {/* Customer Information */}
+        <section className="space-y-2">
+          <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-700 uppercase tracking-widest">
+            <User className="h-4 w-4 text-blue-600" />
+            Customer Information
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6">
+            <div className="space-y-4">
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Customer ID:</p>
+                <p className="text-sm font-medium text-gray-700">{order.customer.internalId?.slice(-8).toUpperCase() || order.customer.id.slice(-8).toUpperCase()}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Order Date & Time
+                </p>
+                <p className="text-sm font-medium text-gray-700">{fmtDateTime(order.createdAt)}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Name:</p>
+              <p className="text-sm font-medium text-blue-600">{order.customer.name}</p>
+              <p className="text-sm font-medium text-blue-600">{order.customer.phone}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Delivery Address */}
+          <section className="space-y-2">
+            <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-600 uppercase tracking-widest">
+              <MapPin className="h-4 w-4 text-blue-600" />
+              Delivery Address
+            </h3>
+            <div className="pl-6 space-y-3">
+              <div className="flex items-start gap-2">
+                <p className="text-sm  text-gray-800 flex-1">
+                  {order.address.line1}{order.address.line2 ? `, ${order.address.line2}` : ''}
+                </p>
+              </div>
+              <p className="text-sm font-medium text-gray-500">{order.address.area}, {order.address.city} - {order.address.pincode}</p>
+              {order.address.landmark && <p className="text-xs font-medium text-gray-400 italic">Landmark: {order.address.landmark}</p>}
+              <div className="pt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 flex items-center gap-1">Contact Person:</p>
+                  <p className="text-sm font-medium text-gray-700">{order.address.contactName || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 flex items-center gap-1">Contact Number:</p>
+                  <p className="text-sm font-medium text-gray-700">{order.address.contactPhone || '—'}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* Delivery Information */}
+          <section className="space-y-2">
+            <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-600 uppercase tracking-widest">
+              <CalendarIcon className="h-4 w-4 text-blue-600" />
+              Delivery Information
+            </h3>
+            <div className="grid grid-cols-1 gap-y-4 pl-6">
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
+                  <Truck className="h-3 w-3" /> Delivery Date
+                </p>
+                <p className="text-sm font-medium text-gray-700">{fmtDate(order.deliveryDate)} (Expected)</p>
+              </div>
+              {order.deliveredAt && (
+                <div>
+                  <p className="text-[10px] text-green-600 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Delivered On
+                  </p>
+                  <p className="text-sm font-bold text-green-600">{fmtDateTime(order.deliveredAt)}</p>
+                </div>
               )}
-            </tbody>
-            <tfoot className="bg-gray-50/80 border-t border-gray-100 divide-y divide-gray-100">
-              <tr>
-                <td colSpan={3} className="px-6 py-3 text-right text-gray-500 font-medium">Subtotal</td>
-                <td className="px-6 py-3 text-right font-semibold text-gray-800 font-mono">₹{subtotal.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td colSpan={3} className="px-6 py-3 text-right text-gray-500 font-medium">Total Tax (GST)</td>
-                <td className="px-6 py-3 text-right font-semibold text-gray-800 font-mono">₹{taxTotal.toFixed(2)}</td>
-              </tr>
-              {order.depositAmount > 0 && (
-                <tr>
-                  <td colSpan={3} className="px-6 py-3 text-right text-gray-500 font-medium">Charged Deposit</td>
-                  <td className="px-6 py-3 text-right font-semibold  font-mono">₹{Number(order.depositAmount).toFixed(2)}</td>
-                </tr>
+            </div>
+          </section>
+
+          {/* Order Breakdown */}
+            <section className="space-y-2">
+              <button 
+                onClick={() => {
+                  const willShow = !showBreakdown;
+                  setShowBreakdown(willShow);
+                  if (willShow) setShowEmptyCans(false);
+                }}
+                className="w-full text-[12px] font-bold flex items-center justify-between text-black-700 uppercase tracking-widest mb-3 hover:bg-gray-50/50 p-2 rounded transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-600" />
+                  Order Breakdown
+                </div>
+                {showBreakdown ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+              </button>
+              {showBreakdown && (
+                <div className="overflow-hidden border border-gray-100 rounded-lg">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="text-left px-4 py-2 text-[10px] font-medium text-gray-500 uppercase tracking-widest">Product</th>
+                        <th className="text-center px-4 py-2 text-[10px] font-medium text-gray-500 uppercase tracking-widest">Qty</th>
+                        <th className="text-right px-4 py-2 text-[10px] font-medium text-gray-500 uppercase tracking-widest">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 bg-white">
+                      {hasItems ? (
+                        order.items.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="px-4 py-2 font-normal text-gray-600">{item.productName}</td>
+                            <td className="px-4 py-2 text-center text-gray-500 font-mono font-light">{item.quantity}</td>
+                            <td className="px-4 py-2 text-right font-medium text-gray-700 font-mono">₹{(item.price * item.quantity).toFixed(2)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-2 font-normal text-gray-600">{order.productName}</td>
+                          <td className="px-4 py-2 text-center text-gray-500 font-mono font-light">{order.quantity}</td>
+                          <td className="px-4 py-2 text-right font-medium text-gray-700 font-mono">₹{subtotal.toFixed(2)}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot className="bg-gray-50/80 border-t border-gray-100 divide-y divide-gray-100">
+                      <tr>
+                        <td colSpan={2} className="px-4 py-2 text-right text-gray-400 font-normal text-[11px]">Subtotal</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-600 font-mono text-xs">₹{subtotal.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={2} className="px-4 py-2 text-right text-gray-400 font-normal text-[11px]">Total Tax (GST)</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-600 font-mono text-xs">₹{taxTotal.toFixed(2)}</td>
+                      </tr>
+                      {order.depositAmount > 0 && (
+                        <tr>
+                          <td colSpan={2} className="px-4 py-2 text-right text-gray-400 font-normal text-[11px]">Charged Deposit</td>
+                          <td className="px-4 py-2 text-right font-medium text-gray-600 font-mono text-xs">₹{Number(order.depositAmount).toFixed(2)}</td>
+                        </tr>
+                      )}
+                      <tr className="bg-blue-50/30">
+                        <td colSpan={2} className="px-4 py-2 text-right font-medium uppercase tracking-widest text-[10px] text-gray-600">Grand Total</td>
+                        <td className="px-4 py-2 text-right font-bold text-xs text-gray-800">₹{Number(order.amount).toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               )}
-              <tr className="bg-blue-50/30">
-                <td colSpan={3} className="px-6 py-3 text-right font-bold uppercase tracking-widest text-[11px]">Grand Total</td>
-                <td className="px-6 py-3 text-right font-black text-base">₹{Number(order.amount).toFixed(2)}</td>
-              </tr>
-            </tfoot>
-          </table>
+            </section>
+
+            {/* Empty Cans Info */}
+            <section className="space-y-2">
+              <button 
+                onClick={() => {
+                  const willShow = !showEmptyCans;
+                  setShowEmptyCans(willShow);
+                  if (willShow) setShowBreakdown(false);
+                }}
+                className="w-full text-[12px] font-bold flex items-center justify-between text-black-700 uppercase tracking-widest mb-3 hover:bg-gray-50/50 p-2 rounded transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-600" />
+                  Empty Cans Details
+                </div>
+                {showEmptyCans ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+              </button>
+              
+              {showEmptyCans && (
+                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+                  {/* Top Side: Number */}
+                  <div className="bg-[#f8f9fc] p-4 text-center border-b border-gray-200 flex flex-col justify-center items-center shrink-0">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">20L Empty Cans in Hand</p>
+                    <p className="text-xl font-bold text-gray-900">{order.customer?.cansInHand || 0}</p>
+                  </div>
+
+                  {/* Bottom Side: Deposit Log */}
+                  <div className="flex-1 bg-white flex flex-col">
+                    <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 shrink-0">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Deposit Amt Log</p>
+                    </div>
+                    <div className="overflow-y-auto max-h-[200px] custom-scrollbar-light">
+                      {order.customer?.depositHistory?.length > 0 ? (
+                        <div className="divide-y divide-gray-50">
+                          {order.customer.depositHistory.map((tx, idx) => (
+                            <div key={idx} className="px-4 py-2 flex justify-between items-center hover:bg-gray-50/50 transition-colors">
+                              <span className="text-[11px] text-gray-600 font-medium">
+                                {format(new Date(tx.date), 'dd MMM yyyy, h:mm a')}
+                              </span>
+                              <div className={`text-xs font-mono font-bold whitespace-nowrap ${tx.type === 'CREDIT' ? 'text-green-600' : 'text-red-600'}`}>
+                                {tx.type === 'CREDIT' ? '+' : '-'}₹{Math.ceil(Math.abs(Number(tx.amount)))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-[11px] text-gray-400 py-4 italic">No deposit logs found</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
         </div>
       </CardContent>
+      
+      <div className="px-6 py-1.5 bg-gray-50/50 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400">
+        <span>Last Updated: {fmtDateTime(order.updatedAt)}</span>
+        
+      </div>
     </Card>
   );
 }
+
+
 
 export default function OrderLogPage() {
   const [searchInput, setSearchInput] = useState('');
@@ -663,7 +693,7 @@ export default function OrderLogPage() {
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span className="flex items-center gap-1"><User className="h-3 w-3" /> {order.customer.name}</span>
+                      <span className="flex items-center gap-1 font-bold text-blue-600"><User className="h-3 w-3" /> {order.customer.name}</span>
                       <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {order.customer.phone}</span>
                       <span className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" /> {fmtDate(order.createdAt)}</span>
                     </div>
@@ -733,39 +763,88 @@ export default function OrderLogPage() {
             </Button>
           </div>
           
-          {/* Order Summary */}
-          <OrderSummaryCard order={logData.order} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <div className="lg:col-span-1 w-full">
+              {/* Order Summary */}
+              <div className="h-[580px] lg:h-[640px]">
+                <OrderSummaryCard order={logData.order} />
+              </div>
+            </div>
 
-          {/* Order Breakdown */}
-          <OrderBreakdownCard order={logData.order} />
-
-          {/* Timeline */}
-          <Card className="shadow-md">
-            <CardHeader className="pb-4 border-b border-gray-100">
-              <CardTitle className="text-sm flex items-center gap-2 font-bold">
-                <Clock className="h-4 w-4 text-blue-600" />
-                Processing Timeline
-                <span className="ml-auto text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded-md">
-                  {logData.timeline.length} event{logData.timeline.length !== 1 ? 's' : ''}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-6">
-              {logData.timeline.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-8">No timeline events found.</p>
-              ) : (
-                <div>
-                  {logData.timeline.map((event, idx) => (
-                    <TimelineEvent
-                      key={event.id}
-                      event={event}
-                      isLast={idx === logData.timeline.length - 1}
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            <div className="lg:col-span-1 w-full">
+              {/* Timeline */}
+              <Card className="shadow-md flex flex-col h-[580px] lg:h-[640px]">
+                <CardHeader className="pb-4 border-b border-gray-100 shrink-0">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <CardTitle className="text-sm flex flex-col gap-1 font-bold">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-blue-600" />
+                        Processing Timeline
+                      </div>
+                      <span className="text-[10px] font-medium text-gray-400 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded-md w-fit">
+                        {logData.timeline.length} event{logData.timeline.length !== 1 ? 's' : ''}
+                      </span>
+                    </CardTitle>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex gap-2 flex-wrap">
+                        <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${STATUS_COLORS[logData.order.status] || 'bg-gray-100 text-gray-800'}`}>
+                          {logData.order.status.replace(/_/g, ' ')}
+                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-1">
+                            <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${PAYMENT_STATUS_COLORS[logData.order.paymentStatus] || 'bg-gray-100 text-gray-800'}`}>
+                              {logData.order.paymentMethod === 'COD' ? 'COD' : `${logData.order.paymentStatus} — ${logData.order.paymentInstrument?.toUpperCase() || logData.order.paymentMethod}`}
+                            </span>
+                            {logData.order.isQrPayment && (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] font-bold h-6">
+                                QR PAID
+                              </Badge>
+                            )}
+                          </div>
+                          {logData.order.bankRrn && (
+                            <p className="text-[10px] text-gray-500 font-mono">RRN: {logData.order.bankRrn}</p>
+                          )}
+                          {logData.order.upiId && (
+                            <p className="text-[10px] text-gray-500 font-mono">UPI: {logData.order.upiId}</p>
+                          )}
+                          {logData.order.payerContact && (
+                            <p className="text-[10px] text-gray-500 font-mono">Payer: {logData.order.payerContact}</p>
+                          )}
+                        </div>
+                      </div>
+                      {logData.order.status === 'DELIVERED' && logData.order.deliveredAt && (
+                        <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Delivered on {fmtDateTime(logData.order.deliveredAt)}
+                        </p>
+                      )}
+                      {logData.order.status !== 'DELIVERED' && logData.order.lastFailedReason && (
+                        <p className="text-sm text-red-600 font-bold flex items-center gap-1.5 mt-1 max-w-[250px] text-right leading-tight justify-end">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          Failed: {logData.order.lastFailedReason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6 flex-1 overflow-y-auto custom-scrollbar-light">
+                  {logData.timeline.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-8">No timeline events found.</p>
+                  ) : (
+                    <div>
+                      {logData.timeline.map((event, idx) => (
+                        <TimelineEvent
+                          key={event.id}
+                          event={event}
+                          isLast={idx === logData.timeline.length - 1}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       )}
 
