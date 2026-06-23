@@ -1,11 +1,17 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { query } from "./db";
 
-// Get customer ID from session cookie
+// Get customer ID from session cookie or Bearer token
 export async function getCustomerIdFromSession(): Promise<string | null> {
     try {
+        const headersList = await headers();
+        const authHeader = headersList.get('authorization') || '';
+        const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
         const cookieStore = await cookies();
-        const sessionToken = cookieStore.get("sessionData")?.value;
+        const cookieToken = cookieStore.get("sessionData")?.value;
+
+        const sessionToken = bearerToken || cookieToken;
         if (!sessionToken) return null;
 
         const sessionRes = await query<{ customerId: string; expiresAt: Date; active: boolean }>(
@@ -24,11 +30,17 @@ export async function getCustomerIdFromSession(): Promise<string | null> {
     }
 }
 
-// Get customer info from session cookie (includes id and phone)
+// Get customer info from session cookie or Bearer token
 export async function getCustomerFromSession(): Promise<{ id: string; phone: string } | null> {
     try {
+        const headersList = await headers();
+        const authHeader = headersList.get('authorization') || '';
+        const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
         const cookieStore = await cookies();
-        const sessionToken = cookieStore.get("sessionData")?.value;
+        const cookieToken = cookieStore.get("sessionData")?.value;
+
+        const sessionToken = bearerToken || cookieToken;
         if (!sessionToken) return null;
 
         const sessionRes = await query<{ customerId: string; expiresAt: Date }>(

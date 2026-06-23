@@ -498,8 +498,8 @@ export async function POST(req: NextRequest) {
 
           await client.query(
             `INSERT INTO "Address"
-             ("id", "customerId", "nickname", "contactName", "contactPhone", "line1", "line2", "area", "city", "pincode", "landmark", "latitude", "longitude", "isDefault", "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $13, $14, true, $12, $12)`,
+             ("id", "customerId", "nickname", "contactName", "contactPhone", "line1", "line2", "area", "city", "pincode", "landmark", "latitude", "longitude", "isDefault", "active", "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $13, $14, true, true, $12, $12)`,
             [
               newAddressId,
               customer.id,

@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
     });
 
     const response = createSecureResponse(
-      { success: true, customer, isNewUser }, // Token removed
+      { success: true, customer, isNewUser, token: sessionToken }, 
       {
         headers: getRateLimitHeaders(req, RATE_LIMITS.AUTH),
       }
