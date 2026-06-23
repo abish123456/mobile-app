@@ -51,7 +51,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleOTPSubmit = async (otp, force = false) => {
+  const handleOTPSubmit = async (otp, force = false, preAuthToken = null) => {
     setIsVerifyingOTP(true);
     setError('');
 
@@ -59,18 +59,19 @@ export default function LoginPage() {
       const response = await fetch('/shop/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneNumber, otp, reqId, force }),
+        body: JSON.stringify({ phone: phoneNumber, otp, reqId, force, ...(preAuthToken ? { preAuthToken } : {}) }),
       });
 
       const data = await response.json();
 
       if (response.status === 409 && data.errorType === 'EXISTING_SESSION') {
         setIsVerifyingOTP(false);
+        const receivedPreAuthToken = data.preAuthToken;
         const confirmed = window.confirm(
           'You are already logged in on another device. Do you want to log in here and log out from there?'
         );
         if (confirmed) {
-          handleOTPSubmit(otp, true);
+          handleOTPSubmit(otp, true, receivedPreAuthToken);
         }
         return;
       }

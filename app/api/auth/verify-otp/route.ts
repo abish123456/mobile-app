@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     const otp = (body?.otp ?? "").toString().trim();
     const reqId = body?.reqId;
     const force = body?.force === true;
+    const preAuthToken = body?.preAuthToken ?? null;
 
     if (!phone || phone.length < 10) {
       return NextResponse.json(
@@ -31,14 +32,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!otp || otp.length !== 6) {
-      return NextResponse.json(
-        { success: false, message: "Invalid OTP format" },
-        { status: 400 },
-      );
-    }
-
     const now = new Date();
+
+    // ── FORCE LOGIN PATH ────────────────────────────────────────────────────────
+    // If force=true with a preAuthToken, skip OTP re-verification.
+    // The preAuthToken was issued by this server during the 409 EXISTING_SESSION
+    // response, proving the OTP was already verified in a prior request.
+    if (force && preAuthToken) {
+      const preAuthRes = await query<{ id: string }>(
+        `SELECT "id" FROM "OtpSession"
+         WHERE "otpHash" = $1 AND "phone" = $2
+           AND "consumed" = false AND "expiresAt" > $3
+         LIMIT 1`,
+        [preAuthToken, phone, now]
+      );
+
+      if (!preAuthRes.rows[0]) {
+        return NextResponse.json(
+          { success: false, message: "Session confirmation expired. Please enter your OTP again." },
+          { status: 400 }
+        );
+      }
+
+      // Mark the preAuth token as consumed so it can't be reused
+      await query(`UPDATE "OtpSession" SET "consumed" = true WHERE "id" = $1`, [preAuthRes.rows[0].id]);
+
+      // Skip to customer lookup — OTP was already verified
+    } else {
+      // ── NORMAL OTP VERIFICATION PATH ──────────────────────────────────────────
+      if (!otp || otp.length !== 6) {
+        return NextResponse.json(
+          { success: false, message: "Invalid OTP format" },
+          { status: 400 },
+        );
+      }
 
     // 1. Try to verify with MSG91 first if we are using the Widget/Flow API
     const authKey = process.env.MSG91_AUTH_KEY;
@@ -124,8 +151,9 @@ export async function POST(req: NextRequest) {
         [session.id],
       );
     }
+    } // end of OTP verification block
 
-    // Check for existing inactive customer to "archive" them
+    // ── CUSTOMER LOOKUP ──────────────────────────────────────────────────────
     // This ensures they get a brand new account (clean state)
     const existingRes = await query<{
       id: string;
@@ -178,9 +206,25 @@ export async function POST(req: NextRequest) {
     const hasActiveSession = existingSessionRes.rows.length > 0;
 
     if (hasActiveSession && !force) {
-      // Warn the user another device is logged in — let them decide
+      // OTP is verified but another device is active — issue a short-lived preAuthToken
+      // so the client can call us back with force=true WITHOUT re-verifying the OTP.
+      const preAuthId = crypto.randomUUID();
+      const preAuthUUID = crypto.randomUUID(); // this becomes the token
+      const preAuthExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      await query(
+        `INSERT INTO "OtpSession" ("id", "phone", "otpHash", "consumed", "expiresAt", "createdAt")
+         VALUES ($1, $2, $3, false, $4, $5)`,
+        [preAuthId, phone, preAuthUUID, preAuthExpiry, now]
+      );
+
       return createSecureResponse(
-        { success: false, errorType: 'EXISTING_SESSION', message: 'You are already logged in on another device.' },
+        {
+          success: false,
+          errorType: 'EXISTING_SESSION',
+          message: 'You are already logged in on another device.',
+          preAuthToken: preAuthUUID,
+        },
         { status: 409 }
       );
     }
