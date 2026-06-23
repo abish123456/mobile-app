@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     const phone = (body?.phone ?? "").toString().trim();
     const otp = (body?.otp ?? "").toString().trim();
     const reqId = body?.reqId;
+    const force = body?.force === true;
 
     if (!phone || phone.length < 10) {
       return NextResponse.json(
@@ -168,6 +169,21 @@ export async function POST(req: NextRequest) {
     // Create a new session
     const sessionToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+    // Check if an active session already exists for this customer
+    const existingSessionRes = await query<{ id: string }>(
+      `SELECT "id" FROM "UserSession" WHERE "customerId" = $1 AND "expiresAt" > $2 LIMIT 1`,
+      [customer.id, now]
+    );
+    const hasActiveSession = existingSessionRes.rows.length > 0;
+
+    if (hasActiveSession && !force) {
+      // Warn the user another device is logged in — let them decide
+      return createSecureResponse(
+        { success: false, errorType: 'EXISTING_SESSION', message: 'You are already logged in on another device.' },
+        { status: 409 }
+      );
+    }
 
     // Enforce single-device login: Delete all existing sessions for this customer
     await query(

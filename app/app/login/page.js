@@ -51,60 +51,52 @@ export default function LoginPage() {
     }
   };
 
-  const handleOTPSubmit = async (otp) => {
+  const handleOTPSubmit = async (otp, force = false) => {
     setIsVerifyingOTP(true);
     setError('');
 
     try {
-      // TODO: Replace with actual API endpoint from Abish
       const response = await fetch('/shop/api/auth/verify-otp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone: phoneNumber, otp, reqId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber, otp, reqId, force }),
       });
 
       const data = await response.json();
 
+      if (response.status === 409 && data.errorType === 'EXISTING_SESSION') {
+        setIsVerifyingOTP(false);
+        const confirmed = window.confirm(
+          'You are already logged in on another device. Do you want to log in here and log out from there?'
+        );
+        if (confirmed) {
+          handleOTPSubmit(otp, true);
+        }
+        return;
+      }
+
       if (response.ok) {
-        // Store auth token or session
-        // Note: authToken is now handled via HTTP-only cookies
-        // if (data.token) {
-        //   localStorage.setItem('authToken', data.token);
-        // }
         localStorage.setItem('isLoggedIn', 'true');
 
-        // Check if this is a different user (different phone number) or a new user
         const previousPhone = localStorage.getItem('userPhone');
         const lastUserPhone = localStorage.getItem('lastUserPhone');
 
-        // Clear cart only if:
-        // 1. It's a new user (first time login)
-        // 2. OR it's a different phone number (different user on same device)
-        // If same phone number and existing user, keep the cart
         const isDifferentUser = previousPhone && previousPhone !== phoneNumber;
         const wasDifferentUserLastTime = lastUserPhone && lastUserPhone !== phoneNumber;
 
         if (data.isNewUser || isDifferentUser || wasDifferentUserLastTime) {
-          // Different user logged in or new user - clear cart
           localStorage.removeItem('cart');
           window.dispatchEvent(new Event('cartUpdated'));
         }
 
         localStorage.setItem('userPhone', phoneNumber);
-        // Update lastUserPhone to current phone for next logout
         localStorage.setItem('lastUserPhone', phoneNumber);
 
-        // Redirect to profile if first time, else to items page
         if (data.isNewUser) {
-          // Set flag to indicate this is a new user flow - hide header/nav during profile setup
           localStorage.setItem('isNewUserFlow', 'true');
-          // Dispatch event to notify components
           window.dispatchEvent(new Event('newUserFlowChanged'));
           router.push('/app/profile?new=true');
         } else {
-          // Clear flag if it exists (shouldn't be set, but just in case)
           localStorage.removeItem('isNewUserFlow');
           window.dispatchEvent(new Event('newUserFlowChanged'));
           router.push('/app/items');
