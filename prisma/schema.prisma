@@ -33,6 +33,7 @@ model UserSession {
   customerId String
   token      String   @unique
   expiresAt  DateTime
+  pushToken  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
