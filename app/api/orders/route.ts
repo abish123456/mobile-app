@@ -1065,15 +1065,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Send Push Notification
+    // Send Push Notification (Only for COD or 0 amount; ONLINE payments send it after verify)
     try {
-      const formattedDate = deliveryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-      await sendPushNotification(
-        customer.id,
-        'Order Placed Successfully! 🎉',
-        `Your order of ${quantity} water can(s) will be delivered on ${formattedDate}.`,
-        { orderId }
-      );
+      if (paymentMethod === 'COD' || totalAmount === 0) {
+        const formattedDate = deliveryDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' });
+        await sendPushNotification(
+          customer.id,
+          'Order Placed Successfully! 🎉',
+          `Your order of ${quantity} water can(s) will be delivered on ${formattedDate}.`,
+          { orderId }
+        );
+      }
     } catch (err) {
       console.error("Failed to send order push notification:", err);
     }

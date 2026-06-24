@@ -4,6 +4,7 @@ import { query, withTransaction } from "../../../../lib/db";
 import { assignOrderToRoute } from "../../../../lib/order-assignment";
 import { getCustomerIdFromSession } from "../../../../lib/session-auth";
 import crypto from "crypto";
+import { sendPushNotification } from "../../../../lib/push";
 
 // Price is now stored in order.amount (in paise)
 
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest) {
       quantity: number;
       amount: number | null; // Amount in paise, may be null for old orders
       depositAmount: number | null; // Amount in paise
+      deliveryDate: Date;
     }>(
-      `SELECT o."id", o."orderNumber", o."customerId", o."paymentStatus", o."quantity", o."amount", o."depositAmount"
+      `SELECT o."id", o."orderNumber", o."customerId", o."paymentStatus", o."quantity", o."amount", o."depositAmount", o."deliveryDate"
        FROM "Order" o
        WHERE o."id" = $1 AND o."customerId" = $2`,
       [orderId, customerId]
@@ -564,6 +566,21 @@ export async function POST(req: NextRequest) {
           message: upiError.message,
           stack: upiError.stack,
         });
+      }
+    }
+
+    // Send push notification if this is a fresh successful payment
+    if (!alreadySuccess) {
+      try {
+        const formattedDate = new Date(order.deliveryDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' });
+        await sendPushNotification(
+          order.customerId,
+          'Payment Successful! 🎉',
+          `Your payment was received. ${order.quantity} water can(s) will be delivered on ${formattedDate}.`,
+          { orderId }
+        );
+      } catch (err) {
+        console.error("Failed to send online order push notification:", err);
       }
     }
 
