@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
 import { getStartOfDayIST, getEndOfDayIST, getNowIST, formatDateToISO } from "../../../../../lib/timezone";
+import { logAction } from "../../../../../lib/audit";
 import { getNextWorkingDay } from "../../../../../lib/holidays";
 import msg91 from "msg91";
 import crypto from "crypto";
@@ -31,8 +32,8 @@ function formatPhoneNumber(phone: string, defaultCountryCode: string = "91"): st
 export async function POST(req: NextRequest) {
     try {
         // Admin authentication check
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "reschedule_order"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const body = await req.json();
@@ -176,8 +177,8 @@ export async function POST(req: NextRequest) {
 
         // 5.5 Log the reschedule action
         try {
-            const oldDateStr = new Date(order.deliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-            const newDateStr = selectedDateStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const oldDateStr = new Date(order.deliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+            const newDateStr = selectedDateStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
             await query(
                 `INSERT INTO "OrderActivityLog" ("id", "orderId", "action", "description", "metadata", "createdAt")
@@ -196,6 +197,19 @@ export async function POST(req: NextRequest) {
                     new Date()
                 ]
             );
+
+            // Log to central AuditLog
+            const adminId = await getAdminIdFromRequest(req);
+            logAction({
+                actorId: adminId,
+                actorType: 'ADMIN',
+                entity: 'ORDER',
+                entityId: orderId,
+                action: 'UPDATE',
+                description: `Rescheduled order from ${oldDateStr} to ${newDateStr}`,
+                oldData: { deliveryDate: order.deliveryDate },
+                newData: { deliveryDate: selectedDateStart }
+            });
         } catch (logError) {
             console.error("Failed to log reschedule activity:", logError);
         }

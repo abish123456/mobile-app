@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 
 // GET /api/admin/not-delivered-reasons - Fetch all reasons
 export async function GET(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "view_not_delivered_reasons"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const result = await query(
@@ -29,9 +30,11 @@ export async function GET(req: NextRequest) {
 // POST /api/admin/not-delivered-reasons - Create a new reason
 export async function POST(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "create_not_delivered_reasons"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
+    
+    const adminId = await getAdminIdFromRequest(req);
 
     const { reason, isActive, autoReassign, hideFromExceptions } = await req.json();
 
@@ -69,9 +72,22 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    const newReason = result.rows[0];
+
+    await logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'FAILURE_REASON',
+      entityId: id,
+      action: 'CREATE',
+      oldData: null,
+      newData: { reason: newReason.reason, isActive: newReason.isActive, autoReassign: newReason.autoReassign, hideFromExceptions: newReason.hideFromExceptions },
+      description: `Created failure reason: ${newReason.reason}`
+    });
+
     return NextResponse.json({
       success: true,
-      reason: result.rows[0]
+      reason: newReason
     });
   } catch (error) {
     console.error("Error in POST /api/admin/not-delivered-reasons:", error);

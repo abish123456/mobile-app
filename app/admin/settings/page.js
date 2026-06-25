@@ -33,8 +33,20 @@ export default function SettingsPage() {
     const [offDays, setOffDays] = useState(new Set()); // Set<number>
     const [isLoadingOffDays, setIsLoadingOffDays] = useState(true);
     const [isSavingOffDays, setIsSavingOffDays] = useState(false);
+    const [adminPermissions, setAdminPermissions] = useState([]);
+    const [isPermsLoading, setIsPermsLoading] = useState(true);
 
+    useEffect(() => {
+        const perms = localStorage.getItem('adminPermissions');
+        if (perms) {
+            setAdminPermissions(JSON.parse(perms));
+        }
+        setIsPermsLoading(false);
+    }, []);
 
+    const hasPermission = (perm) => {
+        return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+    };
 
     useEffect(() => {
         fetchHolidays();
@@ -147,6 +159,7 @@ export default function SettingsPage() {
     };
 
     const handleSaveOffDays = async () => {
+        if (!hasPermission('edit_delivery_settings')) return;
         setIsSavingOffDays(true);
         try {
             const value = [...offDays].sort((a, b) => a - b).join(',');
@@ -180,6 +193,20 @@ export default function SettingsPage() {
 
     // Minimum selectable date = today (YYYY-MM-DD in IST)
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+    if (isPermsLoading) {
+        return <div className="flex justify-center items-center h-[60vh]"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    }
+
+    if (!hasPermission('view_delivery_settings')) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[60vh]">
+                <XCircle className="h-16 w-16 text-destructive mb-4" />
+                <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+                <p className="text-muted-foreground">You do not have permission to view Delivery Settings.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 w-full animate-in fade-in duration-500">
@@ -219,12 +246,14 @@ export default function SettingsPage() {
                                                 <button
                                                     key={day.index}
                                                     type="button"
-                                                    onClick={() => toggleOffDay(day.index)}
+                                                    onClick={() => hasPermission('edit_delivery_settings') && toggleOffDay(day.index)}
+                                                    disabled={!hasPermission('edit_delivery_settings')}
                                                     className={cn(
                                                         'group relative flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all duration-200',
                                                         active
                                                             ? 'bg-primary border-primary text-primary-foreground shadow-md scale-105 z-10'
-                                                            : 'bg-background border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground'
+                                                            : 'bg-background border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground',
+                                                        !hasPermission('edit_delivery_settings') && 'opacity-70 cursor-not-allowed hover:bg-background hover:border-border hover:text-muted-foreground'
                                                     )}
                                                 >
                                                     <span className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-0.5">
@@ -262,16 +291,18 @@ export default function SettingsPage() {
                                         )}
                                     </div>
 
-                                    <Button 
-                                        onClick={handleSaveOffDays} 
-                                        disabled={isSavingOffDays} 
-                                        className="w-full h-12 text-md font-semibold shadow-lg hover:shadow-xl transition-all"
-                                    >
-                                        {isSavingOffDays
-                                            ? <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                            : <Save className="h-5 w-5 mr-2" />}
-                                        Save Schedule
-                                    </Button>
+                                    {hasPermission('edit_delivery_settings') && (
+                                        <Button 
+                                            onClick={handleSaveOffDays} 
+                                            disabled={isSavingOffDays} 
+                                            className="w-full h-12 text-md font-semibold shadow-lg hover:shadow-xl transition-all"
+                                        >
+                                            {isSavingOffDays
+                                                ? <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                                : <Save className="h-5 w-5 mr-2" />}
+                                            Save Schedule
+                                        </Button>
+                                    )}
                                 </>
                             )}
                         </CardContent>
@@ -287,7 +318,7 @@ export default function SettingsPage() {
 
                 {/* ── Right Column: One-off Holiday Dates ─────────────────────────────── */}
                 <div className="lg:col-span-7 space-y-8">
-                    <Card className="border-2 shadow-sm">
+                    <Card className="border-2 shadow-sm overflow-hidden">
                         <CardHeader className="bg-muted/30 border-b pb-4">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -301,13 +332,14 @@ export default function SettingsPage() {
                         </CardHeader>
                         <CardContent className="pt-6 space-y-8">
                             {/* Add holiday form */}
-                            <form onSubmit={handleAddHoliday} className="bg-muted/40 p-5 rounded-2xl border-2 border-muted-foreground/10 space-y-4">
-                                <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Add New Holiday</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="holiday-date" className="text-xs font-bold text-muted-foreground uppercase">Pick Date</Label>
-                                        <Input
-                                            id="holiday-date"
+                            {hasPermission('edit_delivery_settings') && (
+                                <form onSubmit={handleAddHoliday} className="bg-muted/40 p-5 rounded-2xl border-2 border-muted-foreground/10 space-y-4">
+                                    <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Add New Holiday</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="holiday-date" className="text-xs font-bold text-muted-foreground uppercase">Pick Date</Label>
+                                            <Input
+                                                id="holiday-date"
                                             type="date"
                                             min={todayStr}
                                             value={newHoliday.date}
@@ -334,6 +366,7 @@ export default function SettingsPage() {
                                     Register Holiday
                                 </Button>
                             </form>
+                            )}
 
                             {/* Holidays list */}
                             <div className="space-y-4">
@@ -378,17 +411,19 @@ export default function SettingsPage() {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleDeleteHoliday(h.id)}
-                                                    disabled={deletingId === h.id}
-                                                    className="h-9 w-9 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                    {deletingId === h.id
-                                                        ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                        : <Trash2 className="h-4 w-4" />}
-                                                </Button>
+                                                {hasPermission('delete_delivery_settings') && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleDeleteHoliday(h.id)}
+                                                        disabled={deletingId === h.id}
+                                                        className="h-9 w-9 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        {deletingId === h.id
+                                                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                            : <Trash2 className="h-4 w-4" />}
+                                                    </Button>
+                                                )}
                                             </div>
                                         ))}
                                     </div>

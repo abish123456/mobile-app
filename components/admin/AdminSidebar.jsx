@@ -43,6 +43,7 @@ import {
   Settings,
   Phone,
   FileSearch2,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { SidebarTrigger, useSidebar } from '../ui/sidebar';
@@ -72,21 +73,24 @@ import {
   DropdownMenuArrow,
 } from '../ui/dropdown-menu';
 
-const menuItems = [
+const ALL_MENU_ITEMS = [
   {
     title: 'Dashboard',
     url: '/admin',
     icon: Home,
+    permission: 'view_dashboard'
   },
   {
     title: 'Orders',
     url: '/admin/orders',
     icon: Package,
+    permission: 'view_orders'
   },
   {
     title: 'Assign Routes',
     url: '/admin/routes',
     icon: Route,
+    permission: 'view_assign_routes'
   },
   {
     title: 'Master',
@@ -96,26 +100,31 @@ const menuItems = [
         title: 'Routes',
         url: '/admin/service-routes',
         icon: Map,
+        permission: 'view_routes'
       },
       {
         title: 'Service Areas',
         url: '/admin/service-areas',
         icon: MapPin,
+        permission: 'view_service_areas'
       },
       {
         title: 'Products',
         url: '/admin/products',
         icon: ShoppingBag,
+        permission: 'view_products'
       },
       {
         title: 'Delivery Staffs',
         url: '/admin/delivery-boys',
         icon: Users,
+        permission: 'view_delivery_staff'
       },
       {
         title: 'Delivery Reasons',
         url: '/admin/not-delivered-reasons',
         icon: RefreshCcw,
+        permission: 'view_not_delivered_reasons'
       },
     ]
   },
@@ -123,26 +132,31 @@ const menuItems = [
     title: 'Delivery Exceptions',
     url: '/admin/delivery-exceptions',
     icon: AlertCircle,
+    permission: 'view_delivery_exceptions'
   },
   {
     title: 'Order Log',
     url: '/admin/order-log',
     icon: FileSearch2,
+    permission: 'view_order_log'
   },
   {
     title: 'Customer Profiles',
     url: '/admin/customer-prices',
     icon: User,
+    permission: 'view_customers'
   },
   {
     title: 'Deposit Refunds',
     url: '/admin/deposit-refunds',
     icon: IndianRupee,
+    permission: 'view_deposit_refunds'
   },
   {
     title: 'Performance',
     url: '/admin/delivery-boys-performance',
     icon: TrendingUp,
+    permission: 'view_delivery_performance'
   },
   {
     title: 'Reports',
@@ -152,43 +166,67 @@ const menuItems = [
         title: 'General Reports',
         url: '/admin/reports',
         icon: BarChart3,
+        permission: 'view_general_reports'
       },
       {
         title: 'Order Amount Reports',
         url: '/admin/reports/order-amount',
         icon: IndianRupee,
+        permission: 'view_order_amount_reports'
       },
       {
         title: 'Cumulative Reports',
         url: '/admin/reports/cumulative',
         icon: TrendingUp,
+        permission: 'view_cumulative_reports'
       },
       {
         title: 'COD Collection',
         url: '/admin/reports/cod-collection',
         icon: IndianRupee,
+        permission: 'view_cod_collection_reports'
       },
       {
         title: 'Reassigned Orders',
         url: '/admin/reports/reassigned',
         icon: RefreshCcw,
+        permission: 'view_reassigned_orders_reports'
       },
       {
         title: 'Route-wise Report',
         url: '/admin/reports/route-wise',
         icon: CheckCircle2,
+        permission: 'view_route_wise_reports'
       },
       {
         title: 'Cash Settlement',
         url: '/admin/reports/cash-settlement',
         icon: Coins,
+        permission: 'view_cash_settlement_reports'
       },
       {
         title: 'Deposit Report',
         url: '/admin/reports/deposit',
         icon: IndianRupee,
       },
+      {
+        title: 'Product Sales',
+        url: '/admin/reports/product-sales',
+        icon: Package,
+      },
     ]
+  },
+  {
+    title: 'Team',
+    url: '/admin/settings/team',
+    icon: Users,
+    permission: 'view_roles'
+  },
+  {
+    title: 'Audit Logs',
+    url: '/admin/audit-logs',
+    icon: ShieldCheck,
+    permission: 'SUPER_ADMIN'
   },
   {
     title: 'Settings',
@@ -198,11 +236,13 @@ const menuItems = [
         title: 'Delivery Settings',
         url: '/admin/settings',
         icon: CalendarIcon,
+        permission: 'view_delivery_settings'
       },
       {
         title: 'Support Contacts',
         url: '/admin/settings/contacts',
         icon: Phone,
+        permission: 'view_support_contacts'
       },
     ]
   },
@@ -372,9 +412,65 @@ export default function AdminSidebar() {
   const router = useRouter();
   const { isMobile, setOpenMobile, toggleSidebar, open, setOpen } = useSidebar();
   const [lastUpdated, setLastUpdated] = useState('');
+  const [adminPermissions, setAdminPermissions] = useState([]);
 
   // Collapsed = icon-only rail mode
   const isCollapsed = !open;
+
+  useEffect(() => {
+    const syncPermissions = async () => {
+      try {
+        // Fallback to local storage first for immediate render
+        const perms = localStorage.getItem('adminPermissions');
+        if (perms) {
+          setAdminPermissions(JSON.parse(perms));
+        }
+
+        // Fetch fresh permissions from server
+        const adminToken = localStorage.getItem('adminToken');
+        if (!adminToken) return;
+
+        const res = await fetch('/shop/api/admin/auth/permissions', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${adminToken}`
+          }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.permissions) {
+            setAdminPermissions(data.permissions);
+            localStorage.setItem('adminPermissions', JSON.stringify(data.permissions));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to sync admin permissions', e);
+      }
+    };
+
+    syncPermissions();
+  }, [pathname]);
+
+  const hasPermission = (perm) => {
+    if (!perm) return true; // Items without a permission requirement are visible to everyone
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
+
+  // Filter ALL_MENU_ITEMS based on permissions
+  const menuItems = ALL_MENU_ITEMS.map(item => {
+    // If it has children, filter the children first
+    if (item.children) {
+      const filteredChildren = item.children.filter(child => hasPermission(child.permission));
+      // If no children remain, or parent itself lacks permission, omit the parent entirely
+      if (filteredChildren.length === 0 || !hasPermission(item.permission)) {
+        return null;
+      }
+      return { ...item, children: filteredChildren };
+    }
+    // No children, just check parent permission
+    return hasPermission(item.permission) ? item : null;
+  }).filter(Boolean);
 
   useEffect(() => {
     const updateTime = () => {
@@ -400,6 +496,7 @@ export default function AdminSidebar() {
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminEmail');
+    localStorage.removeItem('adminPermissions');
     router.push('/admin/login');
   };
 

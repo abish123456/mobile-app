@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Package, Users, TrendingUp, Loader2, Calendar, UserCheck, ShoppingCart, Truck, IndianRupee, CheckCircle2, XCircle, CreditCard, Banknote, Wallet, RefreshCw, History, ListOrdered, ChevronLeft, ChevronRight } from 'lucide-react';
 import { adminFetch } from '../../lib/admin-api';
@@ -16,6 +17,7 @@ import ReportStats from '../../components/admin/ReportStats';
 import PaymentOverviewStats from '../../components/admin/PaymentOverviewStats';
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState({
     totalOrders: 0,
     todayOrdersReceived: 0,
@@ -48,6 +50,8 @@ export default function AdminDashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [adminPermissions, setAdminPermissions] = useState([]);
+  const [isPermsLoading, setIsPermsLoading] = useState(true);
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [date, setDate] = useState(new Date());
   const [routePage, setRoutePage] = useState(1);
@@ -67,6 +71,42 @@ export default function AdminDashboard() {
 
   const nextView = () => setCurrentView((prev) => (prev + 1) % views.length);
   const prevView = () => setCurrentView((prev) => (prev - 1 + views.length) % views.length);
+
+  useEffect(() => {
+    const perms = localStorage.getItem('adminPermissions');
+    if (perms) {
+      setAdminPermissions(JSON.parse(perms));
+    }
+    setIsPermsLoading(false);
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
+
+  useEffect(() => {
+    if (!isPermsLoading && !hasPermission('view_dashboard')) {
+      const hasPerm = (p) => adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(p);
+      
+      if (hasPerm('view_orders')) router.replace('/admin/orders');
+      else if (hasPerm('view_assign_routes')) router.replace('/admin/routes');
+      else if (hasPerm('view_routes')) router.replace('/admin/service-routes');
+      else if (hasPerm('view_service_areas')) router.replace('/admin/service-areas');
+      else if (hasPerm('view_products')) router.replace('/admin/products');
+      else if (hasPerm('view_delivery_staff')) router.replace('/admin/delivery-boys');
+      else if (hasPerm('view_not_delivered_reasons')) router.replace('/admin/not-delivered-reasons');
+      else if (hasPerm('view_delivery_exceptions')) router.replace('/admin/delivery-exceptions');
+      else if (hasPerm('view_order_log')) router.replace('/admin/order-log');
+      else if (hasPerm('view_customers')) router.replace('/admin/customer-prices');
+      else if (hasPerm('view_deposit_refunds')) router.replace('/admin/deposit-refunds');
+      else if (hasPerm('view_delivery_performance')) router.replace('/admin/delivery-boys-performance');
+      else if (hasPerm('view_general_reports')) router.replace('/admin/reports');
+      else if (hasPerm('view_delivery_settings')) router.replace('/admin/settings');
+      else if (hasPerm('view_support_contacts')) router.replace('/admin/settings/contacts');
+      else if (hasPerm('view_roles')) router.replace('/admin/settings/team');
+      else if (hasPerm('view_admins')) router.replace('/admin/settings/admins');
+    }
+  }, [isPermsLoading, adminPermissions, router]);
 
   const [orderModal, setOrderModal] = useState({
     isOpen: false,
@@ -213,6 +253,20 @@ export default function AdminDashboard() {
       });
     });
   });
+
+  if (isPermsLoading) {
+    return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
+
+  if (!hasPermission('view_dashboard')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <XCircle className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view the Dashboard.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

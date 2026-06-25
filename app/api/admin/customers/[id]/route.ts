@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, withTransaction } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
 import { formatDateIST } from "../../../../../lib/timezone";
+import { logAction } from "../../../../../lib/audit";
 import crypto from "crypto";
+
+export const dynamic = 'force-dynamic';
 
 // GET /api/admin/customers/[id] - Get customer details with transaction history
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {
         const params = await props.params;
         // Admin authentication check
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "view_customers"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const customerId = params.id;
@@ -89,21 +92,22 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     try {
         const params = await props.params;
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        const adminId = await getAdminIdFromRequest(req);
+        if (!(await verifyAdminAuthWithPermission(req, "edit_customer_details")) || !adminId) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const customerId = params.id;
         const body = await req.json();
         const { type, amount, description, adjustCans, cansAmount } = body;
-        // type: 'CREDIT' | 'DEBIT' (for wallet)
-        // amount: number (for wallet)
-        // adjustCans: boolean
-        // cansAmount: number (positive to add, negative to remove)
 
         if (!type && !adjustCans) {
             return NextResponse.json({ success: false, message: "No action specified" }, { status: 400 });
         }
+
+        // Fetch old data for Audit Log
+        const oldCustomerRes = await query(`SELECT "depositWalletBalance", "cansInHand" FROM "Customer" WHERE "id" = $1`, [customerId]);
+        const oldData = oldCustomerRes.rows[0] || {};
 
         await withTransaction(async (client) => {
             // Wallet Adjustment
@@ -134,13 +138,27 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
             // Cans Adjustment
             if (adjustCans && cansAmount !== 0) {
-                // Note: We don't have a transaction log for Cans explicitly yet, but we could stick it in description or just update.
-                // Or maybe we should add CansTransaction? For now, just update.
                 await client.query(
                     `UPDATE "Customer" SET "cansInHand" = "cansInHand" + $1, "updatedAt" = NOW() WHERE "id" = $2`,
                     [cansAmount, customerId]
                 );
             }
+        });
+
+        // Fetch new data for Audit Log
+        const newCustomerRes = await query(`SELECT "depositWalletBalance", "cansInHand" FROM "Customer" WHERE "id" = $1`, [customerId]);
+        const newData = newCustomerRes.rows[0] || {};
+
+        // Async log action
+        logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'CUSTOMER',
+            entityId: customerId,
+            action: 'UPDATE',
+            oldData,
+            newData,
+            description: `Admin manually adjusted customer profile: ${description || 'No description'}`,
         });
 
         return NextResponse.json({ success: true, message: "Customer adjusted successfully" });
@@ -150,3 +168,4 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
     }
 }
+

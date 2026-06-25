@@ -40,6 +40,7 @@ export default function AdminHeader() {
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminEmail');
+    localStorage.removeItem('adminPermissions');
     router.push('/admin/login');
   };
 

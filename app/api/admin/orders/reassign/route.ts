@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuth, verifyAdminAuthWithPermission, getAdminAuthErrorResponse, getAdminPermissionErrorResponse } from "../../../../../lib/admin-auth";
 import crypto from "crypto";
 import { getStartOfDayIST, getEndOfDayIST, getNowIST } from "../../../../../lib/timezone";
 import { getNextWorkingDay } from "../../../../../lib/holidays";
+import { getAdminIdFromRequest } from "../../../../../lib/admin-auth";
+import { logAction } from "../../../../../lib/audit";
 
 export async function POST(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        const hasChangeOrderRoute = await verifyAdminAuthWithPermission(req, "change_order_route");
+        const hasReassignExceptions = await verifyAdminAuthWithPermission(req, "reassign_delivery_exceptions");
+
+        if (!hasChangeOrderRoute && !hasReassignExceptions) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const body = await req.json();
@@ -204,12 +209,45 @@ export async function POST(req: NextRequest) {
         try {
             if (currentAssignmentRes.rowCount > 0) {
                 const oldAssign = currentAssignmentRes.rows[0];
-                const oldDateStr = new Date(oldAssign.routeDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-                const newDateStr = effectiveDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                const oldDateStr = new Date(oldAssign.routeDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+                const newDateStr = effectiveDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
 
-                // Get new delivery boy name for the log
-                const newDbRes = await query<{ name: string }>(`SELECT "name" FROM "DeliveryBoy" WHERE "id" = $1`, [preferredDeliveryBoyId]);
-                const newDbName = newDbRes.rows[0]?.name || "Unknown";
+                // Get new delivery boy name and route name for the log
+                let newDbName = "Unknown";
+                let newRouteName = "Unknown Route";
+                try {
+                    const newDbRes = await query<{ dbName: string, srName: string }>(
+                        `SELECT a."name" as "dbName", sr."name" as "srName" 
+                         FROM "DeliveryBoy" a
+                         LEFT JOIN "Route" r ON r."id" = $1
+                         LEFT JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+                         WHERE a."id" = $2`, 
+                        [finalRouteId, preferredDeliveryBoyId]
+                    );
+                    if (newDbRes.rows.length > 0) {
+                        newDbName = newDbRes.rows[0].dbName || newDbName;
+                        newRouteName = newDbRes.rows[0].srName || newRouteName;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch route names for reassignment log:", e);
+                }
+
+                // Create new query to get old route name
+                let oldRouteName = "Unknown Route";
+                try {
+                    const oldRouteRes = await query<{ srName: string }>(
+                        `SELECT sr."name" as "srName"
+                         FROM "Route" r
+                         LEFT JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+                         WHERE r."id" = $1`,
+                        [oldAssign.routeId]
+                    );
+                    if (oldRouteRes.rows.length > 0) {
+                        oldRouteName = oldRouteRes.rows[0].srName || oldRouteName;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch old route name:", e);
+                }
 
                 await query(
                     `INSERT INTO "OrderActivityLog" ("id", "orderId", "action", "description", "metadata", "createdAt")
@@ -218,16 +256,66 @@ export async function POST(req: NextRequest) {
                         crypto.randomUUID(),
                         orderId,
                         'REASSIGNED',
-                        `Order moved from ${oldAssign.deliveryBoyName} (${oldDateStr}) to ${newDbName} (${newDateStr}).`,
+                        `Order moved from ${oldAssign.deliveryBoyName} (${oldDateStr}) to ${newDateStr}.\nRoute Name : ${newRouteName} | Delivery staff : ${newDbName}`,
                         JSON.stringify({
                             oldDeliveryBoy: oldAssign.deliveryBoyName,
                             newDeliveryBoy: newDbName,
+                            newRoute: newRouteName,
                             oldDate: oldAssign.routeDate,
                             newDate: effectiveDate
                         }),
                         new Date()
                     ]
                 );
+
+                // Log to central AuditLog
+                const adminId = await getAdminIdFromRequest(req);
+                logAction({
+                    actorId: adminId,
+                    actorType: 'ADMIN',
+                    entity: 'ORDER',
+                    entityId: orderId,
+                    action: 'UPDATE',
+                    description: `Reassigned order from ${oldAssign.deliveryBoyName} (${oldDateStr}) to ${newDateStr}.\nRoute Name : ${newRouteName} | Delivery staff : ${newDbName}`,
+                    oldData: { deliveryDate: oldAssign.routeDate, routeName: oldRouteName, deliveryBoyName: oldAssign.deliveryBoyName },
+                    newData: { deliveryDate: effectiveDate, routeName: newRouteName, deliveryBoyName: newDbName }
+                });
+            } else {
+                // Log to central AuditLog even if there was no previous assignment
+                const adminId = await getAdminIdFromRequest(req);
+                const newDateStr = effectiveDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+                
+                let newDbName = "Unknown";
+                let newRouteName = "Unknown Route";
+                if (finalRouteId) {
+                    try {
+                        const newDbRes = await query<{ dbName: string, srName: string }>(
+                            `SELECT a."name" as "dbName", sr."name" as "srName" 
+                             FROM "DeliveryBoy" a
+                             LEFT JOIN "Route" r ON r."id" = $1
+                             LEFT JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+                             WHERE a."id" = $2`, 
+                            [finalRouteId, preferredDeliveryBoyId]
+                        );
+                        if (newDbRes.rows.length > 0) {
+                            newDbName = newDbRes.rows[0].dbName || newDbName;
+                            newRouteName = newDbRes.rows[0].srName || newRouteName;
+                        }
+                    } catch (e) {
+                        console.error("Failed to fetch route names for reassignment log:", e);
+                    }
+                }
+
+                logAction({
+                    actorId: adminId,
+                    actorType: 'ADMIN',
+                    entity: 'ORDER',
+                    entityId: orderId,
+                    action: 'UPDATE',
+                    description: finalRouteId ? `Assigned order on ${newDateStr}.\nRoute Name : ${newRouteName} | Delivery staff : ${newDbName}` : `Assigned order to a new delivery date (${newDateStr}).`,
+                    oldData: { deliveryDate: order.deliveryDate, routeName: null, deliveryBoyName: null },
+                    newData: { deliveryDate: effectiveDate, routeName: finalRouteId ? newRouteName : null, deliveryBoyName: finalRouteId ? newDbName : null }
+                });
             }
         } catch (logError) {
             console.error("Failed to log reassign activity:", logError);

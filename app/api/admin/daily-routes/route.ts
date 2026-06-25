@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
 import crypto from "crypto";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 import { getStartOfDayIST, getEndOfDayIST } from "../../../../lib/timezone";
 import { getNextWorkingDay } from "../../../../lib/holidays";
 
 // POST /api/admin/daily-routes - Create or Update a Daily Route Assignment
 export async function POST(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "change_order_route"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
+        
+        const adminId = await getAdminIdFromRequest(req);
 
         const body = await req.json();
         const { serviceRouteId, deliveryBoyId, date } = body;
@@ -40,6 +43,16 @@ export async function POST(req: NextRequest) {
 
         const startOfDay = getStartOfDayIST(routeDate);
         const endOfDay = getEndOfDayIST(routeDate);
+
+        // Fetch names for logging
+        const srRes = await query<{name: string}>(`SELECT "name" FROM "ServiceRoute" WHERE "id" = $1`, [serviceRouteId]);
+        const routeName = srRes.rows[0]?.name || "Unknown Route";
+        
+        let newStaffName = "Unknown Staff";
+        if (deliveryBoyId) {
+            const dbRes = await query<{name: string}>(`SELECT "name" FROM "DeliveryBoy" WHERE "id" = $1`, [deliveryBoyId]);
+            if (dbRes.rows.length > 0) newStaffName = dbRes.rows[0].name;
+        }
 
         // Check if a route exists for this ServiceRoute + Date (Range based, timezone safe)
         const existingRoute = await query<{ id: string, token: string | null, deliveryBoyId: string }>(
@@ -77,9 +90,46 @@ export async function POST(req: NextRequest) {
             WHERE "id" = $2`,
                     [deliveryBoyId, routeId]
                 );
+
+                if (route.deliveryBoyId !== deliveryBoyId) {
+                    let oldStaffName = "Unassigned";
+                    if (route.deliveryBoyId) {
+                        const oldDbRes = await query<{name: string}>(`SELECT "name" FROM "DeliveryBoy" WHERE "id" = $1`, [route.deliveryBoyId]);
+                        if (oldDbRes.rows.length > 0) oldStaffName = oldDbRes.rows[0].name;
+                    }
+                    await logAction({
+                        actorId: adminId,
+                        actorType: 'ADMIN',
+                        entity: 'ROUTE',
+                        entityId: routeId,
+                        action: 'UPDATE',
+                        oldData: { deliveryBoy: oldStaffName },
+                        newData: { deliveryBoy: newStaffName },
+                        description: `Reassigned ${routeName} from ${oldStaffName} to ${newStaffName}.`
+                    });
+                }
             } else {
+                // Fetch old staff name before deleting
+                let oldStaffName = "Unknown";
+                if (route.deliveryBoyId) {
+                    const oldDbRes = await query<{name: string}>(`SELECT "name" FROM "DeliveryBoy" WHERE "id" = $1`, [route.deliveryBoyId]);
+                    if (oldDbRes.rows.length > 0) oldStaffName = oldDbRes.rows[0].name;
+                }
+
                 // Delete if unassigning
                 await query(`DELETE FROM "Route" WHERE "id" = $1`, [routeId]);
+
+                await logAction({
+                    actorId: adminId,
+                    actorType: 'ADMIN',
+                    entity: 'ROUTE',
+                    entityId: routeId,
+                    action: 'DELETE',
+                    oldData: { deliveryBoy: oldStaffName },
+                    newData: { deliveryBoy: null },
+                    description: `Removed staff ${oldStaffName} from ${routeName}.`
+                });
+
                 return NextResponse.json({
                     success: true,
                     message: "Route assignment removed",
@@ -102,6 +152,17 @@ export async function POST(req: NextRequest) {
          VALUES ($1, $2, $3, $4, NULL, NULL, NOW(), NOW())`,
                 [routeId, routeDate, serviceRouteId, deliveryBoyId]
             );
+
+            await logAction({
+                actorId: adminId,
+                actorType: 'ADMIN',
+                entity: 'ROUTE',
+                entityId: routeId,
+                action: 'CREATE',
+                oldData: { deliveryBoy: null },
+                newData: { deliveryBoy: newStaffName },
+                description: `Created new daily route for ${routeName} and assigned to ${newStaffName}.`
+            });
         }
 
         // Update ServiceRoute's current staff to this delivery boy for carry-forward logic

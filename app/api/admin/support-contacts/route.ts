@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 import crypto from "crypto";
 
 interface SupportContact {
@@ -15,8 +16,8 @@ interface SupportContact {
 
 export async function GET(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, 'view_support_contacts'))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const result = await query<SupportContact>(
@@ -32,8 +33,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, 'create_support_contacts'))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { type, label, value, active = true } = await req.json();
@@ -53,6 +54,18 @@ export async function POST(req: NextRequest) {
       [id, type, label, value, active]
     );
 
+    const adminId = await getAdminIdFromRequest(req);
+    logAction({
+        actorId: adminId,
+        actorType: 'ADMIN',
+        entity: 'SUPPORT_CONTACT',
+        entityId: id,
+        action: 'CREATE',
+        oldData: null,
+        newData: { type, label, value, active },
+        description: `Admin created support contact (${label})`
+    });
+
     return NextResponse.json({ success: true, message: "Support contact created successfully", id });
   } catch (error) {
     console.error("Error creating support contact:", error);
@@ -62,8 +75,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, 'edit_support_contacts'))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { id, type, label, value, active } = await req.json();
@@ -73,16 +86,34 @@ export async function PUT(req: NextRequest) {
     }
 
     // Verify contact exists
-    const checkRes = await query('SELECT "id" FROM "SupportContact" WHERE "id" = $1', [id]);
+    const checkRes = await query<{ type: string, label: string, value: string, active: boolean }>('SELECT "type", "label", "value", "active" FROM "SupportContact" WHERE "id" = $1', [id]);
     if (checkRes.rowCount === 0) {
       return NextResponse.json({ success: false, message: "Support contact not found" }, { status: 404 });
     }
+    const oldContact = checkRes.rows[0];
 
     // Update with values
     await query(
       'UPDATE "SupportContact" SET "type" = COALESCE($2, "type"), "label" = COALESCE($3, "label"), "value" = COALESCE($4, "value"), "active" = COALESCE($5, "active"), "updatedAt" = NOW() WHERE "id" = $1',
       [id, type, label, value, active]
     );
+
+    const adminId = await getAdminIdFromRequest(req);
+    logAction({
+        actorId: adminId,
+        actorType: 'ADMIN',
+        entity: 'SUPPORT_CONTACT',
+        entityId: id,
+        action: 'UPDATE',
+        oldData: oldContact,
+        newData: { 
+            type: type !== undefined ? type : oldContact.type, 
+            label: label !== undefined ? label : oldContact.label, 
+            value: value !== undefined ? value : oldContact.value, 
+            active: active !== undefined ? active : oldContact.active 
+        },
+        description: `Admin updated support contact (${label || oldContact.label})`
+    });
 
     return NextResponse.json({ success: true, message: "Support contact updated successfully" });
   } catch (error) {
@@ -93,8 +124,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, 'delete_support_contacts'))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
@@ -112,10 +143,24 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, message: "ID is required" }, { status: 400 });
     }
 
+    const checkRes = await query<{ label: string }>('SELECT "label" FROM "SupportContact" WHERE "id" = $1', [id]);
+    const oldContact = checkRes.rows[0];
+
     const result = await query('DELETE FROM "SupportContact" WHERE "id" = $1', [id]);
     if (result.rowCount === 0) {
       return NextResponse.json({ success: false, message: "Support contact not found" }, { status: 404 });
     }
+
+    const adminId = await getAdminIdFromRequest(req);
+    logAction({
+        actorId: adminId,
+        actorType: 'ADMIN',
+        entity: 'SUPPORT_CONTACT',
+        entityId: id,
+        action: 'DELETE',
+        oldData: oldContact || null,
+        description: `Admin deleted support contact (${oldContact?.label || id})`
+    });
 
     return NextResponse.json({ success: true, message: "Support contact deleted successfully" });
   } catch (error) {

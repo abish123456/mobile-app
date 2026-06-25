@@ -43,6 +43,22 @@ export default function NotDeliveredReasonsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedReason, setSelectedReason] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
 
   const [formData, setFormData] = useState({
     reason: '',
@@ -162,10 +178,12 @@ export default function NotDeliveredReasonsPage() {
           <h1 className="text-3xl font-bold">Not Delivered Reasons</h1>
           <p className="text-muted-foreground">Manage the list of reasons delivery staff can choose from</p>
         </div>
-        <Button onClick={handleAdd}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Reason
-        </Button>
+        {hasPermission('create_not_delivered_reasons') && (
+          <Button onClick={handleAdd}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Reason
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -189,7 +207,9 @@ export default function NotDeliveredReasonsPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>Auto Reassign</TableHead>
                     <TableHead>Hide Exceptions</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {(hasPermission('edit_not_delivered_reasons') || hasPermission('delete_not_delivered_reasons')) && (
+                      <TableHead className="text-right">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -212,16 +232,22 @@ export default function NotDeliveredReasonsPage() {
                           {r.hideFromExceptions ? 'Hidden' : 'Visible'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(r)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {(hasPermission('edit_not_delivered_reasons') || hasPermission('delete_not_delivered_reasons')) && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            {hasPermission('edit_not_delivered_reasons') && (
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {hasPermission('delete_not_delivered_reasons') && (
+                              <Button variant="ghost" size="icon" onClick={() => handleDelete(r)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

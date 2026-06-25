@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuth, verifyAdminAuthWithPermission, getAdminAuthErrorResponse, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 
 export async function GET(req: NextRequest) {
     try {
@@ -26,8 +27,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "set_hub_location"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const body = await req.json();
@@ -39,6 +40,13 @@ export async function POST(req: NextRequest) {
 
         const locationStr = JSON.stringify({ lat, lng });
 
+        // Fetch old location for audit
+        const oldLocationRes = await query<{ value: string }>(
+            `SELECT value FROM "SystemConfig" WHERE key = $1`,
+            ['HUB_LOCATION']
+        );
+        const oldLocation = oldLocationRes.rows.length > 0 ? JSON.parse(oldLocationRes.rows[0].value) : null;
+
         // Upsert the HUB_LOCATION key
         await query(
             `
@@ -49,6 +57,19 @@ export async function POST(req: NextRequest) {
             `,
             ['HUB_LOCATION', locationStr]
         );
+
+        // Audit Log
+        const adminId = await getAdminIdFromRequest(req);
+        logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'SYSTEM_CONFIG',
+            entityId: 'HUB_LOCATION',
+            action: 'UPDATE',
+            oldData: oldLocation ? { hubLocation: oldLocation } : null,
+            newData: { hubLocation: { lat, lng } },
+            description: `Updated delivery hub starting coordinates`,
+        });
 
         return NextResponse.json({ success: true, message: "Hub location updated" });
     } catch (error) {

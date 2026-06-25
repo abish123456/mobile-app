@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 import crypto from "crypto";
 
 // GET /api/admin/products - List all products
 export async function GET(req: NextRequest) {
   try {
     // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "view_products"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const productsRes = await query<{
@@ -61,8 +62,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "create_products"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const body = await req.json();
@@ -112,22 +113,35 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    const adminId = await getAdminIdFromRequest(req);
+    const newProduct = {
+      id: productId,
+      name: name.trim(),
+      description: description?.trim() || null,
+      price,
+      depositAmount: depositAmount !== undefined ? Number(depositAmount) : 0,
+      image: image?.trim() || null,
+      unit: unit || "",
+      inStock: inStock !== false,
+      gst: gst !== undefined ? Number(gst) : 5.0,
+      isCustomPrice: isCustomPrice === true,
+      active: true,
+    };
+
+    logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'PRODUCT',
+      entityId: productId,
+      action: 'CREATE',
+      newData: newProduct,
+      description: `Created new product: ${newProduct.name}`,
+    });
+
     return NextResponse.json({
       success: true,
       message: "Product created successfully",
-      product: {
-        id: productId,
-        name: name.trim(),
-        description: description?.trim() || null,
-        price,
-        depositAmount: depositAmount !== undefined ? Number(depositAmount) : 0,
-        image: image?.trim() || null,
-        unit: unit || "",
-        inStock: inStock !== false,
-        gst: gst !== undefined ? Number(gst) : 5.0,
-        isCustomPrice: isCustomPrice === true,
-        active: true,
-      },
+      product: newProduct,
     });
   } catch (error) {
     console.error("Error in POST /api/admin/products:", error);

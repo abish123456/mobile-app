@@ -51,6 +51,10 @@ export default function AdminLoginPage() {
         // Store admin token
         localStorage.setItem('adminToken', data.token);
         localStorage.setItem('adminEmail', formData.email);
+        
+        if (data.permissions) {
+          localStorage.setItem('adminPermissions', JSON.stringify(data.permissions));
+        }
 
         // Redirect to admin dashboard
         router.push('/admin');

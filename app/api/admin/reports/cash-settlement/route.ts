@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse } from "../../../../../lib/admin-auth";
 import { getStartOfDayIST, getEndOfDayIST, getNowIST } from "../../../../../lib/timezone";
 
 export const dynamic = 'force-dynamic';
@@ -8,8 +8,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     // 1. Verify admin authentication
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "view_cash_settlement_reports"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
+import { logAction } from "../../../../../lib/audit";
 
 export async function PUT(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "edit_service_areas"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
+        
+        const adminId = await getAdminIdFromRequest(req);
 
         const { id } = await params;
         const { pincode, areaName, active } = await req.json();
+        
+        // Fetch old data
+        const oldRes = await query<{pincode: string, areaName: string, active: boolean}>(
+            `SELECT pincode, "areaName", active FROM "ServiceArea" WHERE id = $1`,
+            [id]
+        );
+        const oldData = oldRes.rows[0];
 
         if (!pincode || !areaName) {
             return NextResponse.json(
@@ -60,9 +70,22 @@ export async function PUT(
             );
         }
 
+        const newArea = result.rows[0];
+
+        await logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'SERVICE_AREA',
+            entityId: id,
+            action: 'UPDATE',
+            oldData: { pincode: oldData?.pincode, areaName: oldData?.areaName, active: oldData?.active },
+            newData: { pincode: newArea.pincode, areaName: newArea.areaName, active: newArea.active },
+            description: `Updated service area "${newArea.areaName}".`
+        });
+
         return NextResponse.json({
             success: true,
-            serviceArea: result.rows[0]
+            serviceArea: newArea
         });
     } catch (error) {
         console.error("Error in PUT /api/admin/service-areas/[id]:", error);
@@ -78,11 +101,20 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "delete_service_areas"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
+        
+        const adminId = await getAdminIdFromRequest(req);
 
         const { id } = await params;
+        
+        // Fetch old data
+        const oldRes = await query<{pincode: string, areaName: string}>(
+            `SELECT pincode, "areaName" FROM "ServiceArea" WHERE id = $1`,
+            [id]
+        );
+        const oldData = oldRes.rows[0] || { pincode: 'Unknown', areaName: 'Unknown' };
 
         const result = await query(
             `DELETE FROM "ServiceArea" WHERE id = $1 RETURNING *`,
@@ -95,6 +127,17 @@ export async function DELETE(
                 { status: 404 }
             );
         }
+
+        await logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'SERVICE_AREA',
+            entityId: id,
+            action: 'DELETE',
+            oldData: { pincode: oldData.pincode, areaName: oldData.areaName },
+            newData: null,
+            description: `Deleted service area "${oldData.areaName}" (${oldData.pincode}).`
+        });
 
         return NextResponse.json({
             success: true,

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 
 export async function GET(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, ["view_service_areas", "view_routes", "view_assign_routes"]))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const result = await query(
@@ -30,9 +31,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "create_service_areas"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
+        
+        const adminId = await getAdminIdFromRequest(req);
 
         const { pincode, areaName, active } = await req.json();
 
@@ -79,9 +82,22 @@ export async function POST(req: NextRequest) {
             ]
         );
 
+        const newArea = result.rows[0];
+
+        await logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'SERVICE_AREA',
+            entityId: newArea.id,
+            action: 'CREATE',
+            oldData: null,
+            newData: { pincode: newArea.pincode, areaName: newArea.areaName, active: newArea.active },
+            description: `Created new service area "${newArea.areaName}" (${newArea.pincode}).`
+        });
+
         return NextResponse.json({
             success: true,
-            serviceArea: result.rows[0]
+            serviceArea: newArea
         });
     } catch (error) {
         console.error("Error in POST /api/admin/service-areas:", error);

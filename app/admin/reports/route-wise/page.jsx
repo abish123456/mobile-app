@@ -62,6 +62,23 @@ export default function RouteWiseDeliveryReportPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
 
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
+
   const [isStartDatePickerOpen, setIsStartDatePickerOpen] = useState(false);
   const [isEndDatePickerOpen, setIsEndDatePickerOpen] = useState(false);
 
@@ -417,7 +434,7 @@ export default function RouteWiseDeliveryReportPage() {
           </h1>
           <p className="text-gray-500 mt-1">Detailed delivery outcomes, items count, and cash vs online splits aggregated by route.</p>
         </div>
-        {!isLoading && filteredData.length > 0 && (
+        {!isLoading && filteredData.length > 0 && hasPermission('export_route_wise_reports') && (
           <div className="flex gap-3 print:hidden">
             <Button
               onClick={handlePrint}
@@ -631,28 +648,30 @@ export default function RouteWiseDeliveryReportPage() {
             {/* Pagination Segment */}
             {!isLoading && filteredData.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-end gap-x-1 gap-y-4 py-5 border-t border-gray-100 px-6">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 whitespace-nowrap">
-                    Showing <b>{Math.min(filteredData.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(filteredData.length, currentPage * itemsPerPage)}</b> of <b>{filteredData.length}</b> orders
-                  </span>
-                  <Select
-                    value={itemsPerPage.toString()}
-                    onValueChange={(value) => {
-                      setItemsPerPage(parseInt(value));
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <SelectTrigger className="h-9 w-auto border-none shadow-none bg-transparent hover:bg-gray-100 focus:ring-0 gap-1 px-2">
-                      <SelectValue placeholder={`${itemsPerPage} per page`} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10 per page</SelectItem>
-                      <SelectItem value="25">25 per page</SelectItem>
-                      <SelectItem value="50">50 per page</SelectItem>
-                      <SelectItem value="100">100 per page</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {hasPermission('view_route_wise_reports_count') && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 whitespace-nowrap">
+                      Showing <b>{Math.min(filteredData.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(filteredData.length, currentPage * itemsPerPage)}</b> of <b>{filteredData.length}</b> orders
+                    </span>
+                    <Select
+                      value={itemsPerPage.toString()}
+                      onValueChange={(value) => {
+                        setItemsPerPage(parseInt(value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 w-auto border-none shadow-none bg-transparent hover:bg-gray-100 focus:ring-0 gap-1 px-2">
+                        <SelectValue placeholder={`${itemsPerPage} per page`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10 per page</SelectItem>
+                        <SelectItem value="25">25 per page</SelectItem>
+                        <SelectItem value="50">50 per page</SelectItem>
+                        <SelectItem value="100">100 per page</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-4">
                   <Button
@@ -665,9 +684,11 @@ export default function RouteWiseDeliveryReportPage() {
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
 
-                  <div className="text-sm text-gray-700">
-                    Page <b>{currentPage}</b> of <b>{totalPages || 1}</b>
-                  </div>
+                  {hasPermission('view_route_wise_reports_count') && (
+                    <div className="text-sm text-gray-700">
+                      Page <b>{currentPage}</b> of <b>{totalPages || 1}</b>
+                    </div>
+                  )}
 
                   <Button
                     variant="outline"

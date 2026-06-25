@@ -90,6 +90,23 @@ export default function CustomerPricesPage() {
   const [walletHistory, setWalletHistory] = useState([]);
   const [isWalletHistoryLoading, setIsWalletHistoryLoading] = useState(false);
 
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
+
   const formatPhoneNumber = (phone) => {
     if (!phone) return '';
     return phone.split('_')[0];
@@ -633,7 +650,9 @@ export default function CustomerPricesPage() {
                     <TableHead className="text-center">Address</TableHead>
                     <TableHead className="text-center text-sm">Prices</TableHead>
                     <TableHead className="text-center">Deposit Amount</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
+                    {hasPermission('edit_customer_details') && (
+                      <TableHead className="text-center">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -722,22 +741,24 @@ export default function CustomerPricesPage() {
                               </Button>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex flex-col items-center gap-2">
-                              {customer.active !== false ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleEditProfile(customer)}
-                                >
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </Button>
-                              ) : (
-                                <Badge variant="destructive" className="text-[10px] h-4 px-1.5 py-2.5 uppercase font-bold tracking-wider">Deactivated</Badge>
-                              )}
-                            </div>
-                          </TableCell>
+                          {hasPermission('edit_customer_details') && (
+                            <TableCell className="text-center">
+                              <div className="flex flex-col items-center gap-2">
+                                {customer.active !== false ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditProfile(customer)}
+                                  >
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </Button>
+                                ) : (
+                                  <Badge variant="destructive" className="text-[10px] h-4 px-1.5 py-2.5 uppercase font-bold tracking-wider">Deactivated</Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })
@@ -750,28 +771,31 @@ export default function CustomerPricesPage() {
           {/* Pagination Controls */}
           {!isLoading && filteredCustomers.length > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-end gap-x-1 gap-y-4 mt-4 pt-4 border-t">
-              <div className="flex items-center gap-2">
-                <span className="text-sm  whitespace-nowrap">
-                  <b>{Math.min(filteredCustomers.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(filteredCustomers.length, currentPage * itemsPerPage)}</b> of <b>{filteredCustomers.length}</b>
-                </span>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => {
-                    setItemsPerPage(parseInt(value));
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-auto border-none shadow-none bg-transparent hover:bg-accent/50 focus:ring-0 gap-1 px-2">
-                    <SelectValue placeholder={`${itemsPerPage} per page`} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10 per page</SelectItem>
-                    <SelectItem value="25">25 per page</SelectItem>
-                    <SelectItem value="50">50 per page</SelectItem>
-                    <SelectItem value="100">100 per page</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {hasPermission('view_customer_count') && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm  whitespace-nowrap">
+                    <b>{Math.min(filteredCustomers.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(filteredCustomers.length, currentPage * itemsPerPage)}</b>
+                    <> of <b>{filteredCustomers.length}</b></>
+                  </span>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => {
+                      setItemsPerPage(parseInt(value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-auto border-none shadow-none bg-transparent hover:bg-accent/50 focus:ring-0 gap-1 px-2">
+                      <SelectValue placeholder={`${itemsPerPage} per page`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 per page</SelectItem>
+                      <SelectItem value="25">25 per page</SelectItem>
+                      <SelectItem value="50">50 per page</SelectItem>
+                      <SelectItem value="100">100 per page</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="flex items-center gap-4">
                 <Button
@@ -784,9 +808,11 @@ export default function CustomerPricesPage() {
                   <ChevronLeft className="h-5 w-5" />
                 </Button>
 
-                <div className="text-sm">
-                  Page {currentPage} of {totalPages || 1}
-                </div>
+                {hasPermission('view_customer_count') && (
+                  <div className="text-sm">
+                    Page {currentPage} of {totalPages || 1}
+                  </div>
+                )}
 
                 <Button
                   variant="outline"

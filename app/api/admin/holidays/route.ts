@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 import { createISTDate, getStartOfDayIST, formatDateToISO } from "../../../../lib/timezone";
 
 // GET /api/admin/holidays
 // Returns all holidays, optionally filtered by ?from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function GET(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, 'view_delivery_settings'))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const { searchParams } = new URL(req.url);
@@ -55,8 +56,8 @@ export async function GET(req: NextRequest) {
 // Body: { date: "YYYY-MM-DD", name?: string }
 export async function POST(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, 'edit_delivery_settings'))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const body = await req.json();
@@ -85,6 +86,18 @@ export async function POST(req: NextRequest) {
             [id, normalizedDate, name]
         );
 
+        const adminId = await getAdminIdFromRequest(req);
+        logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'HOLIDAY',
+            entityId: result.rows[0].id,
+            action: 'CREATE',
+            oldData: null,
+            newData: { date: dateStr, name: name },
+            description: `Admin scheduled holiday on ${dateStr} (${name || 'No Name'})`
+        });
+
         return NextResponse.json({
             success: true,
             holiday: {
@@ -103,8 +116,8 @@ export async function POST(req: NextRequest) {
 // Body: { id: string }
 export async function DELETE(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, 'delete_delivery_settings'))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const body = await req.json();
@@ -119,6 +132,16 @@ export async function DELETE(req: NextRequest) {
         if (result.rows.length === 0) {
             return NextResponse.json({ success: false, message: "Holiday not found" }, { status: 404 });
         }
+
+        const adminId = await getAdminIdFromRequest(req);
+        logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'HOLIDAY',
+            entityId: id,
+            action: 'DELETE',
+            description: `Admin removed holiday record (${id})`
+        });
 
         return NextResponse.json({ success: true, message: "Holiday removed successfully" });
     } catch (error) {

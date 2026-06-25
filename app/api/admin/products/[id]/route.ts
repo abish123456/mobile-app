@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
+import { logAction } from "../../../../../lib/audit";
 
 // PUT /api/admin/products/[id] - Update product
 export async function PUT(
@@ -9,8 +10,8 @@ export async function PUT(
 ) {
   try {
     // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "edit_products"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { id } = await params;
@@ -18,8 +19,8 @@ export async function PUT(
     const { name, description, price, depositAmount, image, unit, inStock, active, gst, isCustomPrice } = body;
 
     // Check if product exists
-    const productRes = await query<{ id: string }>(
-      `SELECT "id" FROM "Product" WHERE "id" = $1`,
+    const productRes = await query<{ id: string, name: string, price: number, active: boolean }>(
+      `SELECT * FROM "Product" WHERE "id" = $1`,
       [id]
     );
 
@@ -137,6 +138,18 @@ export async function PUT(
       values
     );
 
+    const adminId = await getAdminIdFromRequest(req);
+    logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'PRODUCT',
+      entityId: id,
+      action: 'UPDATE',
+      oldData: productRes.rows[0],
+      newData: { ...productRes.rows[0], ...body, updatedAt: new Date() },
+      description: `Updated product: ${productRes.rows[0].name || id}`,
+    });
+
     return NextResponse.json({
       success: true,
       message: "Product updated successfully",
@@ -157,8 +170,8 @@ export async function DELETE(
 ) {
   try {
     // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "delete_products"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     // Extract id from params with better error handling
@@ -195,6 +208,16 @@ export async function DELETE(
       `UPDATE "Product" SET "active" = false, "updatedAt" = $1 WHERE "id" = $2`,
       [now, id]
     );
+
+    const adminId = await getAdminIdFromRequest(req);
+    logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'PRODUCT',
+      entityId: id,
+      action: 'DELETE',
+      description: `Soft deleted product: ${id}`,
+    });
 
     return NextResponse.json({
       success: true,

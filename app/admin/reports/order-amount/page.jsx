@@ -54,6 +54,23 @@ export default function OrderAmountReportsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
 
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
+
   const [isStartDatePickerOpen, setIsStartDatePickerOpen] = useState(false);
   const [isEndDatePickerOpen, setIsEndDatePickerOpen] = useState(false);
 
@@ -228,7 +245,7 @@ export default function OrderAmountReportsPage() {
           </h1>
           <p className="text-gray-500 mt-1">Detailed sales performance by payment method and products</p>
         </div>
-        {!isLoading && reportData.length > 0 && (
+        {!isLoading && reportData.length > 0 && hasPermission('export_order_amount_reports') && (
           <Button onClick={downloadExcel} className="bg-green-600 hover:bg-green-700 shadow-sm transition-all hover:scale-[1.02]">
             <FileDown className="h-4 w-4 mr-2" /> Download Excel
           </Button>
@@ -361,28 +378,30 @@ export default function OrderAmountReportsPage() {
             {/* Pagination Controls */}
             {!isLoading && reportData.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-end gap-x-1 gap-y-4 mt-4 pt-4 border-t px-4 pb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm whitespace-nowrap">
-                    <b>{Math.min(reportData.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(reportData.length, currentPage * itemsPerPage)}</b> of <b>{reportData.length}</b>
-                  </span>
-                  <Select
-                    value={itemsPerPage.toString()}
-                    onValueChange={(value) => {
-                      setItemsPerPage(parseInt(value));
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <SelectTrigger className="h-8 w-auto border-none shadow-none bg-transparent hover:bg-accent/50 focus:ring-0 gap-1 px-2">
-                      <SelectValue placeholder={`${itemsPerPage} per page`} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10 per page</SelectItem>
-                      <SelectItem value="25">25 per page</SelectItem>
-                      <SelectItem value="50">50 per page</SelectItem>
-                      <SelectItem value="100">100 per page</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {hasPermission('view_order_amount_reports_count') && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm whitespace-nowrap">
+                      <b>{Math.min(reportData.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(reportData.length, currentPage * itemsPerPage)}</b> of <b>{reportData.length}</b>
+                    </span>
+                    <Select
+                      value={itemsPerPage.toString()}
+                      onValueChange={(value) => {
+                        setItemsPerPage(parseInt(value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-auto border-none shadow-none bg-transparent hover:bg-accent/50 focus:ring-0 gap-1 px-2">
+                        <SelectValue placeholder={`${itemsPerPage} per page`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10 per page</SelectItem>
+                        <SelectItem value="25">25 per page</SelectItem>
+                        <SelectItem value="50">50 per page</SelectItem>
+                        <SelectItem value="100">100 per page</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-4">
                   <Button
@@ -395,9 +414,11 @@ export default function OrderAmountReportsPage() {
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
 
-                  <div className="text-sm">
-                    Page {currentPage} of {totalPages || 1}
-                  </div>
+                  {hasPermission('view_order_amount_reports_count') && (
+                    <div className="text-sm">
+                      Page {currentPage} of {totalPages || 1}
+                    </div>
+                  )}
 
                   <Button
                     variant="outline"

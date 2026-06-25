@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, withTransaction } from "../../../../lib/db";
 import crypto from "crypto";
+import { logAction } from "../../../../lib/audit";
 
 // POST /api/route-orders/update-status - Update delivery status
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { routeOrderId, deliveryStatus, notDeliveredReason, codCollected, actualReturns } =
-      body;
+    const { routeOrderId, deliveryStatus, notDeliveredReason, codCollected, actualReturns, token } = body;
+
+    // Optional JWT Auth Check
+    const authHeader = req.headers.get("authorization");
+    let jwtUser = null;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const jwtToken = authHeader.split(" ")[1];
+        const jwt = require("jsonwebtoken");
+        jwtUser = jwt.verify(jwtToken, process.env.JWT_SECRET || "fallback_secret_for_development_only");
+      } catch (err) {
+        // Fallback to route token validation if JWT fails or isn't a JWT
+      }
+    }
 
     // Validation
     if (!routeOrderId || typeof routeOrderId !== "string") {
@@ -42,10 +55,13 @@ export async function POST(req: NextRequest) {
          o."paymentStatus", 
          o."status" as "orderStatus", 
          r."tokenExpiresAt",
-         r."isSubmitted"
+         r."isSubmitted",
+         db."id" as "deliveryBoyId",
+         db."name" as "deliveryBoyName"
        FROM "RouteOrder" ro
        INNER JOIN "Order" o ON ro."orderId" = o."id"
        INNER JOIN "Route" r ON ro."routeId" = r."id"
+       LEFT JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
        WHERE ro."id" = $1`,
       [routeOrderId]
     );
@@ -57,7 +73,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { orderId, customerId, paymentStatus, orderStatus, tokenExpiresAt, isSubmitted } = routeOrderRes.rows[0];
+    const { orderId, customerId, paymentStatus, orderStatus, tokenExpiresAt, isSubmitted, deliveryBoyId, deliveryBoyName } = routeOrderRes.rows[0];
     const now = new Date();
 
     // Check if route is already submitted
@@ -187,6 +203,23 @@ export async function POST(req: NextRequest) {
           [cansDelta, walletDelta, customerId]
         );
 
+        // 6. Log audit action
+        logAction({
+          actorId: deliveryBoyId || 'SYSTEM',
+          actorType: 'DELIVERY_BOY',
+          actorName: deliveryBoyName || 'Delivery Staff',
+          entity: 'ORDER',
+          entityId: orderId,
+          action: 'UPDATE',
+          newData: {
+            status: 'DELIVERED',
+            codCollected,
+            totalDelivered,
+            totalActualReturned
+          },
+          description: `Order successfully delivered by ${deliveryBoyName || 'Delivery Staff'}.`
+        });
+
       } else if (deliveryStatus === "NOT_DELIVERED") {
         // NOT_DELIVERED: Only update RouteOrder and Order status.
         // We do NOT touch cansInHand or wallet here because
@@ -211,6 +244,21 @@ export async function POST(req: NextRequest) {
            WHERE "id" = $2`,
           [now, orderId]
         );
+
+        // Log audit action
+        logAction({
+          actorId: deliveryBoyId || 'SYSTEM',
+          actorType: 'DELIVERY_BOY',
+          actorName: deliveryBoyName || 'Delivery Staff',
+          entity: 'ORDER',
+          entityId: orderId,
+          action: 'UPDATE',
+          newData: {
+            status: 'NOT_DELIVERED',
+            reason: notDeliveredReason || "Not specified"
+          },
+          description: `Order delivery failed: ${notDeliveredReason || "Not specified"}`
+        });
 
         // --- AUTO-REASSIGN LOGIC CHECK ---
         if (notDeliveredReason) {

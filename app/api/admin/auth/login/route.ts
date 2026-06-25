@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminCredentials, generateAdminToken } from "../../../../../lib/admin-auth";
+import { verifyAdminCredentials, generateAdminToken, getAdminPermissions } from "../../../../../lib/admin-auth";
 import { checkRateLimit, RATE_LIMITS, getRateLimitHeaders } from "../../../../../lib/rate-limit";
+import { logAction } from "../../../../../lib/audit";
 import { createSecureResponse } from "../../../../../lib/security-headers";
 import { createRequestLogger } from "../../../../../lib/request-logger";
 
@@ -29,8 +30,6 @@ export async function POST(req: NextRequest) {
     // Verify credentials against database
     const result = await verifyAdminCredentials(username, password);
 
-    // Debug logging removed
-
     if (!result.valid || !result.adminId) {
       logger.log({ statusCode: 401 });
       return createSecureResponse(
@@ -41,11 +40,26 @@ export async function POST(req: NextRequest) {
 
     // Generate admin token
     const token = generateAdminToken(result.adminId);
+    
+    // Get their permissions
+    const permissions = await getAdminPermissions(result.adminId);
+
+    // Log the successful login
+    logAction({
+      actorId: result.adminId,
+      actorType: 'ADMIN',
+      actorName: username,
+      entity: 'SESSION',
+      entityId: result.adminId,
+      action: 'LOGIN',
+      description: `Admin ${username} logged in successfully`,
+    });
 
     const response = createSecureResponse(
       {
         success: true,
         token,
+        permissions,
         message: "Login successful",
       },
       {

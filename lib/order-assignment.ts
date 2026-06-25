@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { query, withTransaction } from "./db";
 import { getStartOfDayIST, getEndOfDayIST } from "./timezone";
 import { getNextWorkingDay } from "./holidays";
+import { logAction } from "./audit";
 
 type AssignmentResult = {
   success: boolean;
@@ -171,12 +172,45 @@ export async function assignOrderToRoute(orderId: string): Promise<AssignmentRes
       }
 
       // Update order status to CONFIRMED
-      await client.query(
+      const updateResult = await client.query(
         `UPDATE "Order" 
          SET "status" = 'CONFIRMED', "updatedAt" = $2
-         WHERE "id" = $1 AND "status" = 'PENDING'`,
+         WHERE "id" = $1 AND "status" = 'PENDING'
+         RETURNING "id"`,
         [orderId, now],
       );
+
+      if (updateResult.rows.length > 0) {
+        // Safe fetch of route and staff names for the audit log
+        let routeName = "Unknown Route";
+        let staffName = "Unassigned";
+        try {
+          const namesRes = await client.query<{ routeName: string, staffName: string }>(
+            `SELECT sr."name" as "routeName", a."name" as "staffName"
+             FROM "Route" r
+             LEFT JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+             LEFT JOIN "DeliveryBoy" a ON r."deliveryBoyId" = a."id"
+             WHERE r."id" = $1`,
+            [routeId]
+          );
+          if (namesRes.rows.length > 0) {
+            routeName = namesRes.rows[0].routeName || routeName;
+            staffName = namesRes.rows[0].staffName || staffName;
+          }
+        } catch (e) {
+          console.error("[ASSIGN] Failed to fetch route names for audit log:", e);
+        }
+
+        logAction({
+          actorId: 'SYSTEM',
+          actorType: 'SYSTEM',
+          entity: 'ORDER',
+          entityId: orderId,
+          action: 'UPDATE',
+          newData: { status: 'CONFIRMED' },
+          description: `Order assigned and marked as CONFIRMED.\nRoute Name : ${routeName}\nDelivery staff : ${staffName}`
+        });
+      }
 
       return { success: true };
     });
@@ -341,6 +375,18 @@ export async function reassignOrderToNextWorkingDay(orderId: string, reason?: st
           new Date()
         ]
       );
+
+      // Log to central AuditLog
+      logAction({
+        actorId: 'SYSTEM',
+        actorType: 'SYSTEM',
+        entity: 'ORDER',
+        entityId: orderId,
+        action: 'UPDATE',
+        description: `Auto-rescheduled order from ${oldDateStr} to ${newDateStr} ${reason ? `due to: ${reason}` : ''}`,
+        oldData: { deliveryDate: oldDate },
+        newData: { deliveryDate: newDate }
+      });
     } catch (logError) {
       console.error("[AUTO-REASSIGN] Failed to log activity:", logError);
     }

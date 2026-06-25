@@ -1,19 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
 import crypto from "crypto";
 import { getStartOfDayIST, getEndOfDayIST, getNowIST } from "../../../../../lib/timezone";
 
 // PUT /api/admin/service-routes/[id] - Update service route
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "edit_routes"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
+        
+        const adminId = await getAdminIdFromRequest(req);
 
         const { id } = await params;
         const body = await req.json();
         const { name, description, assignedPincodes } = body;
+
+        // Fetch old data for logging
+        const oldRouteRes = await query<{name: string, description: string}>(
+            `SELECT "name", "description" FROM "ServiceRoute" WHERE "id" = $1`,
+            [id]
+        );
+        const oldData = oldRouteRes.rows[0];
+        const oldPincodesRes = await query<{pincode: string}>(`SELECT pincode FROM "ServiceArea" WHERE "serviceRouteId" = $1`, [id]);
+        const oldPincodes = oldPincodesRes.rows.map(r => r.pincode);
 
         // Validation
         if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -103,6 +114,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             }
         }
 
+        const { logAction } = await import("../../../../../lib/audit");
+        await logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'SERVICE_ROUTE',
+            entityId: id,
+            action: 'UPDATE',
+            oldData: { name: oldData?.name, description: oldData?.description, assignedPincodes: oldPincodes },
+            newData: { name: name.trim(), description, assignedPincodes: assignedPincodes !== undefined ? assignedPincodes : oldPincodes },
+            description: `Updated service route "${name.trim()}".`
+        });
 
         return NextResponse.json({
             success: true,
@@ -121,11 +143,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 // DELETE /api/admin/service-routes/[id] - Delete service route
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "delete_routes"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
+        
+        const adminId = await getAdminIdFromRequest(req);
 
         const { id } = await params;
+
+        // Fetch old data for logging before deleting
+        const oldRouteRes = await query<{name: string, description: string}>(
+            `SELECT "name", "description" FROM "ServiceRoute" WHERE "id" = $1`,
+            [id]
+        );
+        const oldData = oldRouteRes.rows[0] || { name: 'Unknown', description: '' };
+        const oldPincodesRes = await query<{pincode: string}>(`SELECT pincode FROM "ServiceArea" WHERE "serviceRouteId" = $1`, [id]);
+        const oldPincodes = oldPincodesRes.rows.map(r => r.pincode);
 
         // 0. Check for active daily assignments (Routes)
         const activeRoutes = await query(
@@ -156,6 +189,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
             `DELETE FROM "ServiceRoute" WHERE "id" = $1`,
             [id]
         );
+
+        const { logAction } = await import("../../../../../lib/audit");
+        await logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'SERVICE_ROUTE',
+            entityId: id,
+            action: 'DELETE',
+            oldData: { name: oldData.name, description: oldData.description, assignedPincodes: oldPincodes },
+            newData: null,
+            description: `Deleted service route "${oldData.name}".`
+        });
 
         return NextResponse.json({
             success: true,

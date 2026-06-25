@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
 import crypto from "crypto";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 
 // GET /api/admin/delivery-boys - List all delivery boys
 export async function GET(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, ["view_delivery_staff", "view_assign_routes"]))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     // Fetch delivery boys with their assigned service routes
@@ -51,9 +52,11 @@ export async function GET(req: NextRequest) {
 // POST /api/admin/delivery-boys - Create new delivery boy
 export async function POST(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "create_delivery_staff"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
+    
+    const adminId = await getAdminIdFromRequest(req);
 
     const body = await req.json();
     const { name, phone } = body;
@@ -108,6 +111,17 @@ export async function POST(req: NextRequest) {
         [id, name.trim(), phone.trim(), true, false, now]
       );
     }
+
+    await logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'DELIVERY_STAFF',
+      entityId: id,
+      action: 'CREATE',
+      oldData: null,
+      newData: { name: name.trim(), phone: phone.trim(), active: true, onLeave: false },
+      description: `Created delivery staff: ${name.trim()}`
+    });
 
     return NextResponse.json({
       success: true,

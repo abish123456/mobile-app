@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse } from "../../../../../../lib/admin-auth";
 
 // GET /api/admin/orders/[id]/log — Full processing timeline for an order
 export async function GET(
@@ -8,8 +8,8 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "view_order_log"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const { id: orderId } = await params;
@@ -243,7 +243,23 @@ export async function GET(
             [orderId]
         );
 
-        // 8. Fetch customer's cans in hand and deposit history
+        // 8. Fetch global Audit Logs for this order
+        const auditLogsRes = await query<{
+            id: string;
+            action: string;
+            description: string | null;
+            oldData: any;
+            newData: any;
+            createdAt: Date;
+        }>(
+            `SELECT "id", "action", "description", "oldData", "newData", "createdAt"
+             FROM "AuditLog"
+             WHERE "entity" = 'ORDER' AND "entityId" = $1
+             ORDER BY "createdAt" ASC`,
+            [orderId]
+        );
+
+        // 9. Fetch customer's cans in hand and deposit history
         const customerRes = await query<{ cansInHand: number }>(
             `SELECT "cansInHand" FROM "Customer" WHERE "id" = $1`,
             [order.customerId]
@@ -486,6 +502,9 @@ export async function GET(
                 badge: "error",
             });
         }
+
+        // 6. Global Audit logs for this order are intentionally omitted from this timeline 
+        // per the new requirement (they are only visible on the main Audit Logs page).
 
         // Sort all events by timestamp ascending
         events.sort(

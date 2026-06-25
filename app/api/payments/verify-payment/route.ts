@@ -3,6 +3,7 @@ import Razorpay from "razorpay";
 import { query, withTransaction } from "../../../../lib/db";
 import { assignOrderToRoute } from "../../../../lib/order-assignment";
 import { getCustomerIdFromSession } from "../../../../lib/session-auth";
+import { logAction } from "../../../../lib/audit";
 import crypto from "crypto";
 import { sendPushNotification } from "../../../../lib/push";
 
@@ -170,6 +171,21 @@ export async function POST(req: NextRequest) {
         if (updateResult.rows.length === 0) {
           alreadySuccess = true;
           // Order was already marked as SUCCESS by webhook or previous call
+        } else {
+          // Log action in Audit Log for the payment
+          logAction({
+            actorId: customerId,
+            actorType: 'CUSTOMER',
+            entity: 'ORDER',
+            entityId: orderId,
+            action: 'UPDATE',
+            newData: {
+              paymentStatus: 'SUCCESS',
+              paymentMethod: 'ONLINE',
+              paymentInstrument: instrument
+            },
+            description: `Payment verified and successful via Razorpay`
+          });
         }
 
         // 3. Update Customer deposit balance if this order included a deposit

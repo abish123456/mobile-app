@@ -46,6 +46,23 @@ export default function DeliveryBoysPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -180,10 +197,12 @@ export default function DeliveryBoysPage() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog(null)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Delivery Staff
-            </Button>
+            {hasPermission('create_delivery_staff') && (
+              <Button onClick={() => handleOpenDialog(null)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Delivery Staff
+              </Button>
+            )}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -270,10 +289,12 @@ export default function DeliveryBoysPage() {
               <p className="text-muted-foreground mb-4">
                 Add your first delivery staff to get started
               </p>
-              <Button onClick={() => handleOpenDialog(null)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Delivery Staff
-              </Button>
+              {hasPermission('create_delivery_staff') && (
+                <Button onClick={() => handleOpenDialog(null)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Delivery Staff
+                </Button>
+              )}
             </div>
           ) : (
             <div className={`rounded-md border transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -282,7 +303,9 @@ export default function DeliveryBoysPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Phone</TableHead>
-                    <TableHead>Actions</TableHead>
+                    {(hasPermission('edit_delivery_staff') || hasPermission('delete_delivery_staff')) && (
+                      <TableHead>Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -290,32 +313,38 @@ export default function DeliveryBoysPage() {
                     <TableRow key={deliveryBoy.id}>
                       <TableCell className="font-medium">{deliveryBoy.name}</TableCell>
                       <TableCell>{deliveryBoy.phone}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(deliveryBoy)}
-                            disabled={isSubmitting}
-                            title="Edit"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setSelectedDeliveryBoy(deliveryBoy);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                            disabled={isSubmitting}
-                            className="text-destructive hover:text-black"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {(hasPermission('edit_delivery_staff') || hasPermission('delete_delivery_staff')) && (
+                        <TableCell>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {hasPermission('edit_delivery_staff') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleOpenDialog(deliveryBoy)}
+                                disabled={isSubmitting}
+                                title="Edit"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {hasPermission('delete_delivery_staff') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setSelectedDeliveryBoy(deliveryBoy);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                                disabled={isSubmitting}
+                                className="text-destructive hover:text-black"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

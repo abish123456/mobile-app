@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
 import crypto from "crypto";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 import { getStartOfDayIST, getEndOfDayIST, getNowIST } from "../../../../lib/timezone";
 
 // GET /api/admin/service-routes - List all service routes
 export async function GET(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "view_routes")) && !(await verifyAdminAuthWithPermission(req, "view_assign_routes"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const { searchParams } = new URL(req.url);
@@ -105,9 +106,10 @@ export async function GET(req: NextRequest) {
 // POST /api/admin/service-routes - Create new service route
 export async function POST(req: NextRequest) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "create_routes"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
+        const adminId = await getAdminIdFromRequest(req);
 
         const body = await req.json();
         const { name, description, assignedPincodes } = body;
@@ -171,6 +173,17 @@ export async function POST(req: NextRequest) {
                 [id, assignedPincodes]
             );
         }
+
+        await logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'SERVICE_ROUTE',
+            entityId: id,
+            action: 'CREATE',
+            oldData: null,
+            newData: { name: name.trim(), description, assignedPincodes: assignedPincodes || [] },
+            description: `Created new service route "${name.trim()}".`
+        });
 
         return NextResponse.json({
             success: true,

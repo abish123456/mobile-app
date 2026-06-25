@@ -40,6 +40,22 @@ import { adminFetch } from '../../../lib/admin-api';
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
 
   const [showDialog, setShowDialog] = useState(false);
   const [showCutoffDialog, setShowCutoffDialog] = useState(false);
@@ -308,19 +324,23 @@ export default function ProductsPage() {
               })()}
             </span>
           </div> */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCutoffDialog(true)}
-            className="h-9 border-primary/20 hover:bg-primary/5"
-          >
-            <Clock className="h-4 w-4 mr-2 text-primary" />
-            Adjust Cut-off
-          </Button>
-          <Button onClick={handleAdd} className="h-9">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
+          {hasPermission('adjust_product_cutoff') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCutoffDialog(true)}
+              className="h-9 border-primary/20 hover:bg-primary/5"
+            >
+              <Clock className="h-4 w-4 mr-2 text-primary" />
+              Adjust Cut-off
+            </Button>
+          )}
+          {hasPermission('create_products') && (
+            <Button onClick={handleAdd} className="h-9">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Product
+            </Button>
+          )}
         </div>
       </div>
 
@@ -340,10 +360,12 @@ export default function ProductsPage() {
               <p className="text-muted-foreground mb-4">
                 Get started by adding your first product
               </p>
-              <Button onClick={handleAdd}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Product
-              </Button>
+              {hasPermission('create_products') && (
+                <Button onClick={handleAdd}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Product
+                </Button>
+              )}
             </div>
           ) : (
             <div className={`rounded-md border mt-5 transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -356,7 +378,9 @@ export default function ProductsPage() {
                     <TableHead>GST (%)</TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
+                    {(hasPermission('edit_products') || hasPermission('delete_products')) && (
+                      <TableHead className="text-center">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -374,24 +398,30 @@ export default function ProductsPage() {
                           {product.inStock ? 'In Stock' : 'Out of Stock'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(product)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(product)}
-                          >
-                            {/* <Trash2 className="h-4 w-4 text-destructive" /> */}
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {(hasPermission('edit_products') || hasPermission('delete_products')) && (
+                        <TableCell className="text-center">
+                          <div>
+                            {hasPermission('edit_products') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(product)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {hasPermission('delete_products') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(product)}
+                              >
+                                {/* <Trash2 className="h-4 w-4 text-destructive" /> */}
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

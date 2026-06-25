@@ -42,7 +42,20 @@ export default function DeliveryBoysPerformancePage() {
   const itemsPerPage = 8;
   const [isStartDatePickerOpen, setIsStartDatePickerOpen] = useState(false);
   const [isEndDatePickerOpen, setIsEndDatePickerOpen] = useState(false);
+  const [adminPermissions, setAdminPermissions] = useState([]);
+  const [isPermsLoading, setIsPermsLoading] = useState(true);
 
+  useEffect(() => {
+    const perms = localStorage.getItem('adminPermissions');
+    if (perms) {
+      setAdminPermissions(JSON.parse(perms));
+    }
+    setIsPermsLoading(false);
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
 
   useEffect(() => {
     fetchPerformance();
@@ -101,6 +114,20 @@ export default function DeliveryBoysPerformancePage() {
     setEndDate(null);
     setSelectedDeliveryBoyId('all');
   };
+
+  if (isPermsLoading) {
+    return <div className="flex justify-center items-center h-[60vh]"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
+
+  if (!hasPermission('view_delivery_performance')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <XCircle className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view Delivery Performance.</p>
+      </div>
+    );
+  }
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {

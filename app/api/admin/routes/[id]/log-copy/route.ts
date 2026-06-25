@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../../lib/db";
 import crypto from "crypto";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../../lib/admin-auth";
+import { logAction } from "../../../../../../lib/audit";
 
 /**
  * POST /api/admin/routes/[id]/log-copy
@@ -12,8 +13,8 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "copy_route_links"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const { id } = await params;
@@ -40,12 +41,24 @@ export async function POST(
             );
         }
 
-        // 2. Log the copy action
+        // 2. Log the copy action in old table
         await query(
             `INSERT INTO "RouteTokenLog" ("id", "routeId", "token", "action", "generatedAt")
              VALUES ($1, $2, $3, 'COPIED', NOW())`,
             [`rtl_${crypto.randomUUID()}`, id, token]
         );
+
+        // 3. Log to new AuditLog system
+        const adminId = await getAdminIdFromRequest(req);
+        logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'ROUTE',
+            entityId: id,
+            action: 'READ',
+            newData: { action: 'TOKEN_COPIED' },
+            description: "Copied route link"
+        });
 
         return NextResponse.json({
             success: true,

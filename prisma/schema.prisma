@@ -169,6 +169,9 @@ model DeliveryBoy {
 
   returnRequests ReturnCanRequest[]
 
+  adminId String?
+  admin   Admin?  @relation(fields: [adminId], references: [id])
+
   @@index([active, onLeave])
 }
 
@@ -393,17 +396,31 @@ model CustomerProductPrice {
 }
 
 model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  username     String   @unique
+  id           String     @id @default(cuid())
+  email        String     @unique
+  username     String     @unique
   passwordHash String
   name         String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  active       Boolean    @default(true)
+  roleId       String?
+  role         AdminRole? @relation(fields: [roleId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  deliveryBoyProfiles DeliveryBoy[]
 
   @@index([email])
   @@index([username])
+}
+
+model AdminRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions String[] // Array of permission strings
+  admins      Admin[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model ServiceArea {
@@ -526,3 +543,22 @@ model OrderActivityLog {
   @@index([orderId])
   @@index([createdAt])
 }
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?  // The Admin ID, Customer ID, Delivery Boy ID, or null for System
+  actorType   String   // 'ADMIN', 'CUSTOMER', 'SYSTEM', 'DELIVERY_BOY'
+  actorName   String?  // Snapshot of their name at the time
+  entity      String   // e.g., 'ORDER', 'CUSTOMER', 'ADMIN_USER', 'PRODUCT'
+  entityId    String   // ID of the affected record
+  action      String   // e.g., 'CREATE', 'UPDATE', 'DELETE', 'ORDER_PLACED'
+  oldData     Json?    // Snapshot before the change
+  newData     Json?    // Snapshot after the change
+  description String?  // Human readable action text
+  createdAt   DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+

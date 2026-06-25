@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
 import crypto from "crypto";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse } from "../../../../lib/admin-auth";
 import { getStartOfDayIST, getEndOfDayIST } from "../../../../lib/timezone";
 
 // GET /api/admin/routes - List all daily routes (Updated for ServiceRoute schema)
 export async function GET(req: NextRequest) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "view_assign_routes"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../../lib/admin-auth";
 import { getNowIST } from "../../../../../../lib/timezone";
+import { logAction } from "../../../../../../lib/audit";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        if (!(await verifyAdminAuth(req))) {
-            return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+        if (!(await verifyAdminAuthWithPermission(req, "reject_refunds"))) {
+            return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
         }
 
         const { id: requestId } = await params;
@@ -46,6 +47,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
              WHERE "id" = $2`,
             [now, requestId]
         );
+
+        const adminId = await getAdminIdFromRequest(req);
+        logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'CUSTOMER',
+            entityId: request.customerId,
+            action: 'REJECT_DEPOSIT_REFUND',
+            oldData: { status: 'REQUESTED' },
+            newData: { status: 'REJECTED' },
+            description: `Admin rejected deposit refund of ₹${request.amount}`
+        });
 
         return NextResponse.json({
             success: true,

@@ -60,6 +60,23 @@ export default function ReassignedReportsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isStartDatePickerOpen, setIsStartDatePickerOpen] = useState(false);
   const [isEndDatePickerOpen, setIsEndDatePickerOpen] = useState(false);
+
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
   const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -273,13 +290,15 @@ export default function ReassignedReportsPage() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Reassigned Orders Report</h1>
           <p className="text-gray-500 mt-1">Monitor orders that have been reassigned across routes and staff.</p>
         </div>
-        <Button 
-          onClick={() => setIsDownloadDialogOpen(true)} 
-          disabled={filteredOrders.length === 0 || isLoading}
-          className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-        >
-          <Download className="mr-2 h-4 w-4" /> Download Report
-        </Button>
+        {hasPermission('export_reassigned_orders_reports') && (
+          <Button 
+            onClick={() => setIsDownloadDialogOpen(true)} 
+            disabled={filteredOrders.length === 0 || isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+          >
+            <Download className="mr-2 h-4 w-4" /> Download Report
+          </Button>
+        )}
       </div>
 
       <Card className="border-none shadow-sm bg-white">
@@ -498,34 +517,38 @@ export default function ReassignedReportsPage() {
           {/* Pagination Controls */}
           {!isLoading && filteredOrders.length > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-end gap-x-6 gap-y-4 py-4 border-t px-6 bg-gray-50/50">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Items per page:</span>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => {
-                    setItemsPerPage(parseInt(value));
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-[70px] bg-white">
-                    <SelectValue placeholder={itemsPerPage} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {hasPermission('view_reassigned_orders_reports_count') && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Items per page:</span>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => {
+                      setItemsPerPage(parseInt(value));
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[70px] bg-white">
+                      <SelectValue placeholder={itemsPerPage} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-              <div className="text-sm text-gray-500">
-                <span className="font-medium text-gray-900">
-                  {Math.min(filteredOrders.length, (currentPage - 1) * itemsPerPage + 1)}-
-                  {Math.min(filteredOrders.length, currentPage * itemsPerPage)}
-                </span>
-                {" "}of{" "}
-                <span className="font-medium text-gray-900">{filteredOrders.length}</span>
-              </div>
+              {hasPermission('view_reassigned_orders_reports_count') && (
+                <div className="text-sm text-gray-500">
+                  <span className="font-medium text-gray-900">
+                    {Math.min(filteredOrders.length, (currentPage - 1) * itemsPerPage + 1)}-
+                    {Math.min(filteredOrders.length, currentPage * itemsPerPage)}
+                  </span>
+                  {" "}of{" "}
+                  <span className="font-medium text-gray-900">{filteredOrders.length}</span>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <Button
@@ -537,9 +560,11 @@ export default function ReassignedReportsPage() {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="text-sm font-medium">
-                  Page {currentPage} of {totalPages || 1}
-                </div>
+                {hasPermission('view_reassigned_orders_reports_count') && (
+                  <div className="text-sm font-medium">
+                    Page {currentPage} of {totalPages || 1}
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   size="icon"

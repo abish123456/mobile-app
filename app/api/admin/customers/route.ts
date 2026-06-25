@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, withTransaction } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 import crypto from "crypto";
 
 // GET /api/admin/customers - List all customers
 export async function GET(req: NextRequest) {
   try {
     // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "view_customers"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const customersRes = await query<{
@@ -85,8 +86,8 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "edit_customer_details"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const body = await req.json();
@@ -129,6 +130,17 @@ export async function PUT(req: NextRequest) {
     }
 
     const currentCustomer = currentCustomerRes.rows[0];
+
+    // Fetch full existing data specifically for the audit log to avoid "not set" issues
+    const auditOldDataRes = await query(
+      `SELECT c."id", c."name", c."phone", c."depositWalletBalance", c."cansInHand", c."active",
+              a."line1", a."line2", a."area", a."city", a."pincode", a."latitude", a."longitude"
+       FROM "Customer" c
+       LEFT JOIN "Address" a ON a."customerId" = c."id" AND a."isDefault" = true
+       WHERE c."id" = $1`,
+      [id]
+    );
+    const auditOldData = auditOldDataRes.rows[0] || currentCustomer;
 
     // Update customer details in a transaction
     await withTransaction(async (client) => {
@@ -217,6 +229,18 @@ export async function PUT(req: NextRequest) {
           );
         }
       }
+    });
+
+    const adminId = await getAdminIdFromRequest(req);
+    logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'CUSTOMER',
+      entityId: id,
+      action: 'UPDATE',
+      oldData: auditOldData,
+      newData: { ...auditOldData, ...body, ...(address || {}) },
+      description: `Updated customer profile details for ${phone}`,
     });
 
     return NextResponse.json({

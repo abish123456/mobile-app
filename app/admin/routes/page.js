@@ -60,6 +60,22 @@ export default function RoutesPage() {
     date: new Date(),
   });
   const [isAssignSubmitting, setIsAssignSubmitting] = useState(false);
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
 
   const [dialogError, setDialogError] = useState('');
   const [copiedRoutes, setCopiedRoutes] = useState({}); // Track copied state for each route
@@ -320,6 +336,24 @@ export default function RoutesPage() {
         toast.success('Assignment updated successfully');
         setShowAssignDialog(false);
         fetchRoutes(); // Refresh all data to reflect changes
+        
+        // Background sync for audit logs
+        try {
+          if (data.routeId) {
+            const newStaff = assignFormData.deliveryBoyId ? deliveryBoys.find(s => s.id === assignFormData.deliveryBoyId) : null;
+            adminFetch('/api/admin/audit-logs/route-orders', {
+              method: 'POST',
+              body: JSON.stringify({
+                routeId: data.routeId,
+                action: assignFormData.deliveryBoyId ? 'UPDATE' : 'DELETE',
+                routeName: selectedRoute.name,
+                newStaffName: newStaff ? newStaff.name : null
+              })
+            }).catch(e => console.error('Audit sync error:', e));
+          }
+        } catch (e) {
+          console.error('Audit prep error:', e);
+        }
       } else {
         toast.error(data.message || 'Assignment failed');
       }
@@ -536,12 +570,38 @@ export default function RoutesPage() {
     setShowRedistributeConfirm(false);
 
     try {
+      const targetRoute = routes.find(r => r.id === pendingTargetRouteId);
+      if (!targetRoute) throw new Error("Target route not found");
+
+      let finalTargetRouteId = targetRoute.routeId;
+
+      if (!finalTargetRouteId) {
+        const payload = {
+          serviceRouteId: targetRoute.id,
+          deliveryBoyId: targetRoute.deliveryBoyId || null,
+          date: selectedDate,
+        };
+        const assignRes = await adminFetch('/api/admin/daily-routes', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const assignData = await assignRes.json();
+        
+        if (assignData.success && assignData.routeId) {
+          finalTargetRouteId = assignData.routeId;
+        } else {
+          toast.error("Failed to initialize target route");
+          setIsRedistributing(false);
+          return;
+        }
+      }
+
       const response = await adminFetch('/api/admin/routes/redistribute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceRouteId: ordersDialogRoute.routeId,
-          targetRouteId: pendingTargetRouteId,
+          targetRouteId: finalTargetRouteId,
           orderIds: Array.from(selectedOrderIds)
         })
       });
@@ -686,10 +746,12 @@ export default function RoutesPage() {
         <div className="flex flex-col items-end gap-1">
           
           <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => setShowHubDialog(true)} className="gap-2 text-blue-500 border-blue-200 hover:bg-blue-50">
-              <MapPin className="h-4 w-4" />
-              Set Hub Location
-            </Button>
+            {hasPermission('set_hub_location') && (
+              <Button variant="outline" onClick={() => setShowHubDialog(true)} className="gap-2 text-blue-500 border-blue-200 hover:bg-blue-50">
+                <MapPin className="h-4 w-4" />
+                Set Hub Location
+              </Button>
+            )}
             <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
 
               <PopoverTrigger asChild>
@@ -878,7 +940,8 @@ export default function RoutesPage() {
                                         <CheckCircle2 className="h-3 w-3 mr-1" />
                                         Link Generated
                                       </Badge>
-                                      <Button
+                                      {hasPermission('copy_route_links') && (
+                                        <Button
                                         variant="ghost"
                                         size="icon"
                                         className="h-8 w-8 text-primary hover:bg-primary/10 shrink-0"
@@ -886,9 +949,10 @@ export default function RoutesPage() {
                                         title="Copy Link"
                                       >
                                         <Copy className="h-4 w-4" />
-                                      </Button>
+                                        </Button>
+                                      )}
                                     </div>
-                                  ) : (
+                                  ) : hasPermission('generate_route_links') ? (
                                     <Button
                                       variant="default"
                                       size="sm"
@@ -911,7 +975,7 @@ export default function RoutesPage() {
                                         </>
                                       )}
                                     </Button>
-                                  )}
+                                  ) : null}
 
                                   <Button
                                     variant="ghost"
@@ -1155,7 +1219,7 @@ export default function RoutesPage() {
               Confirm Redistribution
             </DialogTitle>
             <DialogDescription className="py-2">
-              Are you sure you want to move <strong>{selectedOrderIds.size}</strong> order{selectedOrderIds.size !== 1 ? 's' : ''} to <strong>{routes.find(r => r.routeId === pendingTargetRouteId)?.name || 'the selected route'}</strong>?
+              Are you sure you want to move <strong>{selectedOrderIds.size}</strong> order{selectedOrderIds.size !== 1 ? 's' : ''} to <strong>{routes.find(r => r.id === pendingTargetRouteId)?.name || 'the selected route'}</strong>?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-2 gap-2 sm:gap-0">
@@ -1381,24 +1445,26 @@ export default function RoutesPage() {
                 <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 mr-2">
                   <span className="text-sm font-bold text-blue-700">{selectedOrderIds.size} Selected</span>
                   <div className="h-4 w-[1px] bg-blue-200 mx-1" />
+                {hasPermission('change_order_route') && (
                   <Select onValueChange={handleMoveOrders} disabled={isRedistributing || !!ordersDialogRoute?.token}>
                     <SelectTrigger className="h-8 w-[180px] text-xs bg-white border-blue-200 focus:ring-blue-500">
                       <SelectValue placeholder={ordersDialogRoute?.token ? "Locked (Link Generated)" : "Move to Route..."} />
                     </SelectTrigger>
                     <SelectContent>
                       {routes
-                        .filter(r => r.routeId && r.routeId !== ordersDialogRoute?.routeId && !r.token)
+                        .filter(r => r.id !== ordersDialogRoute?.id && !r.token)
                         .map(r => (
-                          <SelectItem key={r.routeId} value={r.routeId} className="text-xs">
+                          <SelectItem key={r.id} value={r.id} className="text-xs">
                             {r.name} ({r.deliveryBoyName || 'No Staff'})
                           </SelectItem>
                         ))
                       }
-                      {routes.filter(r => r.routeId && r.routeId !== ordersDialogRoute?.routeId && !r.token).length === 0 && (
+                      {routes.filter(r => r.id !== ordersDialogRoute?.id && !r.token).length === 0 && (
                         <div className="px-2 py-1.5 text-xs text-muted-foreground italic">No other available routes</div>
                       )}
                     </SelectContent>
                   </Select>
+                )}
                 </div>
               )}
               {hasUnsavedSort && (

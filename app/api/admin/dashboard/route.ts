@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse } from "../../../../lib/admin-auth";
 import { getStartOfDayIST, getEndOfDayIST, getTodayIST, getNowIST } from "../../../../lib/timezone";
 import { runDailyCleanup } from "../../../../lib/cron-cleanup";
 
@@ -15,9 +15,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    // Admin authentication & permission check
+    if (!(await verifyAdminAuthWithPermission(req, 'view_dashboard'))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

@@ -62,6 +62,22 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [areas, setAreas] = useState([]);
   const [pincodes, setPincodes] = useState([]);
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [reconcilingOrderId, setReconcilingOrderId] = useState(null);
@@ -874,8 +890,8 @@ export default function AdminOrdersPage() {
                         <Badge variant={getStatusBadge(order.status)} className="uppercase text-[10px] py-0.5">
                           {order.status.replace(/_/g, ' ')}
                         </Badge>
-                        </div>
                       </div>
+                    </div>
 
 
                     <div className="grid grid-cols-2 gap-4 text-sm border-t pt-3">
@@ -969,7 +985,7 @@ export default function AdminOrdersPage() {
                                   <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-tight">#{order.orderNumber || 'PENDING'}</div>
 
                                   {/* Integrated Edit Action */}
-                                  {!order.isRouteGenerated && (order.status !== 'DELIVERED' && order.status !== 'CANCELLED') && (
+                                  {!order.isRouteGenerated && (order.status !== 'DELIVERED' && order.status !== 'CANCELLED') && hasPermission('edit_order_address') && (
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
@@ -1143,33 +1159,35 @@ export default function AdminOrdersPage() {
           {/* Pagination Controls */}
           {!isLoading && pagination.total > 0 && (
             <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t">
-              <Select
-                value={pagination.limit.toString()}
-                onValueChange={(value) => {
-                  setPagination(prev => ({
-                    ...prev,
-                    limit: parseInt(value),
-                    page: 1
-                  }));
-                }}
-              >
-                <SelectTrigger className="h-9 w-auto border-none shadow-none hover:bg-muted/50 transition-colors px-2 gap-2 focus:ring-0">
-                  <div className="text-sm font-medium flex items-center gap-1">
-                    <span>{Math.min(pagination.total, (pagination.page - 1) * pagination.limit + 1)}</span>
-                    <span>-</span>
-                    <span>{Math.min(pagination.total, pagination.page * pagination.limit)}</span>
-                    <span className="mx-1 font-normal text-muted-foreground">of</span>
-                    <span>{pagination.total}</span>
-                  </div>
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {[10, 25, 50, 100].map((val) => (
-                    <SelectItem key={val} value={val.toString()}>
-                      {val} per page
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {hasPermission('view_order_count') && (
+                <Select
+                  value={pagination.limit.toString()}
+                  onValueChange={(value) => {
+                    setPagination(prev => ({
+                      ...prev,
+                      limit: parseInt(value),
+                      page: 1
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-auto border-none shadow-none hover:bg-muted/50 transition-colors px-2 gap-2 focus:ring-0">
+                    <div className="text-sm font-medium flex items-center gap-1">
+                      <span>{Math.min(pagination.total, (pagination.page - 1) * pagination.limit + 1)}</span>
+                      <span>-</span>
+                      <span>{Math.min(pagination.total, pagination.page * pagination.limit)}</span>
+                      <span className="mx-1 font-normal text-muted-foreground">of</span>
+                      <span>{pagination.total}</span>
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent align="end">
+                    {[10, 25, 50, 100].map((val) => (
+                      <SelectItem key={val} value={val.toString()}>
+                        {val} per page
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Button
                 variant="outline"
@@ -1179,9 +1197,11 @@ export default function AdminOrdersPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="text-sm font-medium">
-                Page {pagination.page} of {pagination.totalPages}
-              </div>
+              {hasPermission('view_order_count') && (
+                <div className="text-sm font-medium">
+                  Page {pagination.page} of {pagination.totalPages}
+                </div>
+              )}
               <Button
                 variant="outline"
                 size="icon"
@@ -1606,7 +1626,7 @@ export default function AdminOrdersPage() {
                     {/* Reschedule Button - Show for all statuses except DELIVERED/CANCELLED and when route token is NOT generated */}
                     {selectedOrder.status !== 'DELIVERED' &&
                       selectedOrder.status !== 'CANCELLED' &&
-                      !selectedOrder.routeToken && (
+                      !selectedOrder.routeToken && hasPermission('reschedule_order') && (
                         <Button
                           onClick={() => openRescheduleDialog(selectedOrder)}
                           className="bg-orange-600 hover:bg-orange-700"
@@ -1617,7 +1637,7 @@ export default function AdminOrdersPage() {
                       )}
 
                     {/* Cancel Button */}
-                    {selectedOrder.status !== 'DELIVERED' && selectedOrder.status !== 'CANCELLED' && (
+                    {selectedOrder.status !== 'DELIVERED' && selectedOrder.status !== 'CANCELLED' && hasPermission('cancel_order') && (
                       <Button
                         variant="destructive"
                         onClick={() => openCancelConfirm(selectedOrder)}

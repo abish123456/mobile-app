@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
-import { assignOrderToRoute } from "../../../../lib/order-assignment";
 import crypto from "crypto";
+import { assignOrderToRoute } from "../../../../lib/order-assignment";
+import { logAction } from "../../../../lib/audit";
 
 const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || "";
 
@@ -455,6 +456,23 @@ async function processWebhookEvent(event: any) {
                 WHERE "id" = $1 AND ("paymentInstrument" IS NULL OR "paymentInstrument" = 'Online' OR "paymentMethod" = 'COD')`,
                [orderId, instrument, isQrNote]
             );
+
+            // Log action in Audit Log for the payment
+            logAction({
+              actorId: 'SYSTEM',
+              actorType: 'SYSTEM',
+              actorName: 'Payment Webhook',
+              entity: 'ORDER',
+              entityId: orderId,
+              action: 'UPDATE',
+              newData: {
+                paymentStatus: 'SUCCESS',
+                paymentMethod: 'ONLINE',
+                paymentInstrument: instrument,
+                isQrPayment: isQrNote
+              },
+              description: `Payment successful via Razorpay ${isQrNote ? 'QR/Link' : ''}`
+            });
           }
         }
       }
@@ -621,6 +639,22 @@ async function processWebhookEvent(event: any) {
             WHERE "id" = $1 AND ("paymentInstrument" IS NULL OR "paymentInstrument" = 'Online' OR "paymentMethod" = 'COD')`,
            [orderId, instrument, isQrNote]
         );
+
+        // Log action in Audit Log for the payment
+        logAction({
+          actorId: 'SYSTEM',
+          actorType: 'SYSTEM',
+          actorName: 'Payment Webhook',
+          entity: 'ORDER',
+          entityId: orderId,
+          action: 'UPDATE',
+          newData: {
+            paymentStatus: 'SUCCESS',
+            paymentMethod: 'ONLINE',
+            isQrPayment: isQrNote
+          },
+          description: `Payment successful via Razorpay ${isQrNote ? 'QR/Link' : ''}`
+        });
 
         // Update Customer deposit balance if this order included a deposit
         if (orderData && orderData.depositAmount && orderData.depositAmount > 0) {

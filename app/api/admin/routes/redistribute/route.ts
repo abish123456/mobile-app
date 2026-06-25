@@ -1,8 +1,8 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { query, withTransaction } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuth, getAdminAuthErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
 import crypto from "crypto";
+import { logAction } from "../../../../../lib/audit";
 
 export async function POST(req: NextRequest) {
     try {
@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
         if (!(await verifyAdminAuth(req))) {
             return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
         }
+
+        const adminId = await getAdminIdFromRequest(req);
 
         const body = await req.json();
         const { sourceRouteId, targetRouteId, orderIds } = body;
@@ -21,11 +23,11 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // 2. Fetch details about routes for logging and safety checks
-        const routeInfoRes = await query<{ id: string, deliveryBoyName: string, date: Date, token: string | null }>(
-            `SELECT r."id", db."name" as "deliveryBoyName", r."date", r."token"
+        const routeInfoRes = await query<{ id: string, routeName: string, deliveryBoyName: string, date: Date, token: string | null }>(
+            `SELECT r."id", sr."name" as "routeName", db."name" as "deliveryBoyName", r."date", r."token"
              FROM "Route" r
-             JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
+             JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+             LEFT JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
              WHERE r."id" IN ($1, $2)`,
             [sourceRouteId, targetRouteId]
         );
@@ -49,27 +51,31 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: "Cannot move orders to a route that already has a generated link." }, { status: 400 });
         }
 
-        const { deliveryBoyName: targetStaff, date: targetDate } = targetInfo!;
+        const { routeName: sourceRouteName, deliveryBoyName: sourceStaff } = sourceInfo!;
+        const { routeName: targetRouteName, deliveryBoyName: targetStaff, date: targetDate } = targetInfo!;
         const targetDateStr = new Date(targetDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
         // 3. Execution using Transaction
-        const result = await withTransaction(async (client) => {
-            let movedCount = 0;
+        const { movedCount, successfullyMovedOrderIds, movedUUIDs } = await withTransaction(async (client) => {
+            let count = 0;
+            const movedIds: string[] = [];
+            const movedUUIDArray: string[] = [];
             const currentDate = new Date();
 
             for (const orderId of orderIds) {
                 // Check if the order is actually in the source route and is pending
                 const checkRes = await client.query(
-                    `SELECT ro."id", db."name" as "sourceStaff"
+                    `SELECT ro."id", db."name" as "sourceStaff", o."status" as "currentStatus", o."orderNumber"
                      FROM "RouteOrder" ro
                      JOIN "Route" r ON ro."routeId" = r."id"
                      JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
+                     JOIN "Order" o ON ro."orderId" = o."id"
                      WHERE ro."orderId" = $1 AND ro."routeId" = $2 AND ro."deliveryStatus" = 'PENDING'`,
                     [orderId, sourceRouteId]
                 );
 
                 if (checkRes.rows.length > 0) {
-                    const { sourceStaff } = checkRes.rows[0];
+                    const { sourceStaff, currentStatus, orderNumber } = checkRes.rows[0];
 
                     // A. Update RouteOrder to the new route and reset sequence
                     await client.query(
@@ -106,17 +112,48 @@ export async function POST(req: NextRequest) {
                         [orderId, currentDate]
                     );
 
-                    movedCount++;
+                    count++;
+                    movedIds.push(orderNumber ? `#${orderNumber}` : `#${orderId.substring(0, 8)}`);
+                    movedUUIDArray.push(orderId);
                 }
             }
 
-            return movedCount;
+            return { movedCount: count, successfullyMovedOrderIds: movedIds, movedUUIDs: movedUUIDArray };
         });
+
+        // 4. Create log entries
+        if (movedCount > 0) {
+            // Bulk Route log
+            logAction({
+                actorId: adminId,
+                actorType: 'ADMIN',
+                entity: 'ROUTE',
+                entityId: sourceRouteId,
+                action: 'UPDATE',
+                oldData: { targetRouteId: null, movedOrders: [] },
+                newData: { targetRouteId: targetRouteId, movedOrders: successfullyMovedOrderIds },
+                description: `Bulk redistributed ${movedCount} orders from ${sourceRouteName} to ${targetRouteName}`
+            });
+
+            // Individual Order logs
+            for (const orderId of movedUUIDs) {
+                logAction({
+                    actorId: adminId,
+                    actorType: 'ADMIN',
+                    entity: 'ORDER',
+                    entityId: orderId,
+                    action: 'UPDATE',
+                    oldData: { routeId: sourceRouteId, deliveryBoy: sourceStaff || null },
+                    newData: { routeId: targetRouteId, deliveryBoy: targetStaff || null },
+                    description: `Order reassigned from ${sourceRouteName} to ${targetRouteName} (Delivery staff: ${targetStaff}).`
+                });
+            }
+        }
 
         return NextResponse.json({
             success: true,
-            message: `Successfully moved ${result} orders to ${targetStaff}.`,
-            movedCount: result
+            message: `Successfully moved ${movedCount} orders to ${targetStaff}.`,
+            movedCount: movedCount
         });
 
     } catch (error) {

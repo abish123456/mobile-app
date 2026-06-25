@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuth, verifyAdminAuthWithPermission, getAdminAuthErrorResponse, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
+import { logAction } from "../../../../../lib/audit";
 import crypto from "crypto";
 
 // GET /api/admin/orders/[id] - Get order details by ID
@@ -9,9 +10,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    // Admin authentication check (viewing an order)
+    if (!(await verifyAdminAuthWithPermission(req, "view_orders"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
 
     const { id: orderId } = await params;
@@ -294,16 +295,20 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
-    }
-
     const { id: orderId } = await params;
     const body = await req.json();
     const { action } = body;
 
-    if (action !== 'CANCEL' && action !== 'UPDATE_ADDRESS') {
+    // Granular permission check
+    if (action === 'CANCEL') {
+      if (!(await verifyAdminAuthWithPermission(req, "cancel_order"))) {
+        return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
+      }
+    } else if (action === 'UPDATE_ADDRESS') {
+      if (!(await verifyAdminAuthWithPermission(req, "edit_order_address"))) {
+        return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
+      }
+    } else {
       return NextResponse.json(
         { success: false, message: "Invalid action" },
         { status: 400 }
@@ -413,6 +418,18 @@ export async function PATCH(
         }
       });
 
+      const adminId = await getAdminIdFromRequest(req);
+      logAction({
+        actorId: adminId,
+        actorType: 'ADMIN',
+        entity: 'ORDER',
+        entityId: orderId,
+        action: 'UPDATE',
+        oldData: { status: currentStatus },
+        newData: { status: 'CANCELLED' },
+        description: `Order cancelled by Admin`,
+      });
+
       return NextResponse.json({
         success: true,
         message: "Order cancelled successfully"
@@ -429,6 +446,14 @@ export async function PATCH(
       }
 
       const { getStartOfDayIST, getEndOfDayIST } = await import("../../../../../lib/timezone");
+
+      const oldAddressRes = await query(`SELECT * FROM "Address" WHERE "id" = $1`, [addressId]);
+      const oldAddress = oldAddressRes.rows[0];
+
+      let newStatus = currentStatus;
+      let newRouteName = null;
+      let newStaffName = null;
+      let routeOutcomeMsg = null;
 
       await withTransaction(async (client) => {
         // 1. Update the Address record
@@ -483,6 +508,13 @@ export async function PATCH(
 
           if (serviceRouteRes.rows.length > 0) {
             const { serviceRouteId, currentDeliveryBoyId } = serviceRouteRes.rows[0];
+            
+            // Fetch names for logging
+            const routeNameRes = await client.query(`SELECT "name" FROM "ServiceRoute" WHERE "id" = $1`, [serviceRouteId]);
+            const staffNameRes = await client.query(`SELECT "name" FROM "DeliveryBoy" WHERE "id" = $1`, [currentDeliveryBoyId]);
+            newRouteName = routeNameRes.rows[0]?.name || 'Unknown Route';
+            newStaffName = staffNameRes.rows[0]?.name || 'Unknown Staff';
+
             const startOfDeliveryDay = getStartOfDayIST(new Date(deliveryDate));
             const endOfDeliveryDay = getEndOfDayIST(new Date(deliveryDate));
 
@@ -529,7 +561,56 @@ export async function PATCH(
             `UPDATE "Order" SET "status" = $1, "updatedAt" = NOW() WHERE "id" = $2`,
             [isAssigned ? 'CONFIRMED' : 'PENDING', orderId]
           );
+          
+          newStatus = isAssigned ? 'CONFIRMED' : 'PENDING';
+
+          if (!isAssigned) {
+             routeOutcomeMsg = "No route available for new pincode, so order was unassigned and status reverted to PENDING.";
+          } else {
+             routeOutcomeMsg = `Order reassigned to ${newRouteName} (Staff: ${newStaffName}).`;
+          }
         }
+      });
+
+      const adminId = await getAdminIdFromRequest(req);
+      
+      const newAddress = {
+        ...oldAddress,
+        line1: address.line1 || address.addressLine1 || oldAddress?.line1,
+        line2: address.line2 !== undefined ? address.line2 : (address.addressLine2 !== undefined ? address.addressLine2 : oldAddress?.line2),
+        area: address.area || oldAddress?.area,
+        city: address.city || oldAddress?.city,
+        pincode: address.pincode || oldAddress?.pincode,
+        landmark: address.landmark !== undefined ? address.landmark : oldAddress?.landmark,
+        contactName: address.contactName !== undefined ? address.contactName : oldAddress?.contactName,
+        contactPhone: address.contactPhone !== undefined ? address.contactPhone : oldAddress?.contactPhone,
+        nickname: address.nickname !== undefined ? address.nickname : oldAddress?.nickname,
+        latitude: address.latitude ? parseFloat(address.latitude) : oldAddress?.latitude,
+        longitude: address.longitude ? parseFloat(address.longitude) : oldAddress?.longitude,
+      };
+
+      let logDesc = `Updated delivery address for order.`;
+      if (routeOutcomeMsg) {
+         logDesc += `\n${routeOutcomeMsg}`;
+      }
+
+      const oldDataPayload: any = { address: oldAddress };
+      const newDataPayload: any = { address: newAddress };
+
+      if (newStatus !== currentStatus) {
+         oldDataPayload.status = currentStatus;
+         newDataPayload.status = newStatus;
+      }
+
+      logAction({
+        actorId: adminId,
+        actorType: 'ADMIN',
+        entity: 'ORDER',
+        entityId: orderId,
+        action: 'UPDATE',
+        oldData: oldDataPayload,
+        newData: newDataPayload,
+        description: logDesc,
       });
 
       return NextResponse.json({

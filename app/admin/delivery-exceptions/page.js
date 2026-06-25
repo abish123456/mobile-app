@@ -43,6 +43,22 @@ export default function NotDeliveredPage() {
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [adminPermissions, setAdminPermissions] = useState([]);
+
+    useEffect(() => {
+        try {
+            const perms = localStorage.getItem('adminPermissions');
+            if (perms) {
+                setAdminPermissions(JSON.parse(perms));
+            }
+        } catch (e) {
+            console.error('Failed to parse admin permissions', e);
+        }
+    }, []);
+
+    const hasPermission = (perm) => {
+        return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+    };
 
     // Reassign state
     const [showReassignDialog, setShowReassignDialog] = useState(false);
@@ -332,7 +348,9 @@ export default function NotDeliveredPage() {
                                                 <TableHead className="w-[220px]">Failed Reason</TableHead>
                                                 <TableHead className="w-[100px]">Payment</TableHead>
                                                 <TableHead className="w-[160px]">Assigned To</TableHead>
-                                                <TableHead className="w-[120px]">Actions</TableHead>
+                                                {hasPermission('edit_customer_details') && (
+                                                    <TableHead className="w-[120px]">Actions</TableHead>
+                                                )}
                                             </>
                                         ) : (
                                             <>
@@ -417,28 +435,32 @@ export default function NotDeliveredPage() {
                                                             {order.previousDeliveryBoy}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="align-middle w-[120px]">
-                                                        {!order.activeRouteId ? (
-                                                            <div className="flex items-center text-xs text-gray-500 italic font-medium">
-                                                                <AlertCircle className="h-3 w-3 mr-1.5 shrink-0" />
-                                                                Create Route for {order.address.pincode}
-                                                            </div>
-                                                        ) : (order.activeRouteId && (order.lastDeliveryBoy === 'Unassigned' || !order.lastDeliveryBoy || order.lastDeliveryBoy === 'Unknown')) ? (
-                                                            <div className="flex items-center text-xs text-gray-500 italic font-medium">
-                                                                <AlertCircle className="h-3 w-3 mr-1.5 shrink-0" />
-                                                                Assign Staff to {order.activeRouteName}
-                                                            </div>
-                                                        ) : (
-                                                            <Button
-                                                                size="sm"
-                                                                className="bg-orange-600 hover:bg-orange-700 text-white h-7 text-xs"
-                                                                onClick={() => handleReassignClick(order)}
-                                                            >
-                                                                <Truck className="h-3 w-3 mr-1.5" />
-                                                                Reassign
-                                                            </Button>
-                                                        )}
-                                                    </TableCell>
+                                                    {hasPermission('edit_customer_details') && (
+                                                        <TableCell className="align-middle w-[120px]">
+                                                            {!order.activeRouteId ? (
+                                                                <div className="flex items-center text-xs text-gray-500 italic font-medium">
+                                                                    <AlertCircle className="h-3 w-3 mr-1.5 shrink-0" />
+                                                                    Create Route for {order.address.pincode}
+                                                                </div>
+                                                            ) : (order.activeRouteId && (order.lastDeliveryBoy === 'Unassigned' || !order.lastDeliveryBoy || order.lastDeliveryBoy === 'Unknown')) ? (
+                                                                <div className="flex items-center text-xs text-gray-500 italic font-medium">
+                                                                    <AlertCircle className="h-3 w-3 mr-1.5 shrink-0" />
+                                                                    Assign Staff to {order.activeRouteName}
+                                                                </div>
+                                                            ) : hasPermission('reassign_delivery_exceptions') ? (
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="bg-orange-600 hover:bg-orange-700 text-white h-7 text-xs"
+                                                                    onClick={() => handleReassignClick(order)}
+                                                                >
+                                                                    <Truck className="h-3 w-3 mr-1.5" />
+                                                                    Reassign
+                                                                </Button>
+                                                            ) : (
+                                                                <div className="text-xs text-muted-foreground">-</div>
+                                                            )}
+                                                        </TableCell>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <>

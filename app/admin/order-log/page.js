@@ -689,7 +689,7 @@ export default function OrderLogPage() {
                         {order.orderNumber || `#${order.id.slice(-8).toUpperCase()}`}
                       </span>
                       <Badge variant="outline" className={STATUS_COLORS[order.status]}>
-                        {order.status.replace(/_/g, ' ')}
+                        {order.status === 'OUT_FOR_DELIVERY' ? 'DELIVERY IN PROGRESS' : order.status.replace(/_/g, ' ')}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -788,7 +788,7 @@ export default function OrderLogPage() {
                     <div className="flex flex-col items-end gap-1">
                       <div className="flex gap-2 flex-wrap">
                         <span className={`text-xs px-2 py-1 rounded-full font-semibold border ${STATUS_COLORS[logData.order.status] || 'bg-gray-100 text-gray-800'}`}>
-                          {logData.order.status.replace(/_/g, ' ')}
+                          {logData.order.status === 'OUT_FOR_DELIVERY' ? 'DELIVERY IN PROGRESS' : logData.order.status.replace(/_/g, ' ')}
                         </span>
                         <div className="flex flex-col items-end gap-1">
                           <div className="flex items-center gap-1">

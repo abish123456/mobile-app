@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, withTransaction } from "../../../../../../lib/db";
 import { optimizeRoute, RouteStop } from "../../../../../../lib/route-optimizer";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../../lib/admin-auth";
+import { verifyAdminAuth, getAdminAuthErrorResponse, getAdminIdFromRequest } from "../../../../../../lib/admin-auth";
+import { logAction } from "../../../../../../lib/audit";
 
 export async function POST(
     req: NextRequest,
@@ -15,13 +16,27 @@ export async function POST(
             return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
         }
 
+        const adminId = await getAdminIdFromRequest(req);
+
+        // Fetch the human-readable route name
+        const routeInfoRes = await query<{ routeName: string }>(
+            `SELECT sr."name" as "routeName"
+             FROM "Route" r
+             JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+             WHERE r."id" = $1`,
+            [routeId]
+        );
+        const routeName = routeInfoRes.rows.length > 0 ? routeInfoRes.rows[0].routeName : "Unknown Route";
+
         // 2. Fetch all orders for this route with their GPS coordinates
         const ordersRes = await query<{
             id: string; // RouteOrder ID
+            orderNumber: string;
             latitude: number | null;
             longitude: number | null;
+            sequence: number;
         }>(
-            `SELECT ro."id", a."latitude", a."longitude"
+            `SELECT ro."id", o."orderNumber", a."latitude", a."longitude", ro."sequence"
        FROM "RouteOrder" ro
        JOIN "Order" o ON o."id" = ro."orderId"
        JOIN "Address" a ON a."id" = o."addressId"
@@ -76,6 +91,7 @@ export async function POST(
         // 4. Run Optimization
         const stops: RouteStop[] = pendingOrders.map(o => ({
             id: o.id,
+            orderNumber: o.orderNumber,
             lat: o.latitude!,
             lng: o.longitude!
         }));
@@ -100,6 +116,24 @@ export async function POST(
                 `UPDATE "Route" SET "isAutoOptimized" = true, "updatedAt" = NOW() WHERE "id" = $1`,
                 [routeId]
             );
+        });
+
+        // 6. Log the optimization action
+        const oldSequenceArray = pendingOrders
+            .sort((a, b) => a.sequence - b.sequence)
+            .map(o => `${o.sequence}. #${o.orderNumber}`);
+            
+        const newSequenceArray = optimizedStops.map((stop, index) => `${index + 1}. #${stop.orderNumber}`);
+
+        logAction({
+            actorId: adminId,
+            actorType: 'ADMIN',
+            entity: 'ROUTE',
+            entityId: routeId,
+            action: 'UPDATE',
+            oldData: { previousSequence: oldSequenceArray },
+            newData: { optimizedSequence: newSequenceArray },
+            description: `Optimised delivery sequences for ${optimizedStops.length} orders in ${routeName}.`
         });
 
         return NextResponse.json({

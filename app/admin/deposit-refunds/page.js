@@ -40,6 +40,23 @@ export default function DepositRefundsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDate, setFilterDate] = useState(null);
 
+    const [adminPermissions, setAdminPermissions] = useState([]);
+
+    useEffect(() => {
+        try {
+            const perms = localStorage.getItem('adminPermissions');
+            if (perms) {
+                setAdminPermissions(JSON.parse(perms));
+            }
+        } catch (e) {
+            console.error('Failed to parse admin permissions', e);
+        }
+    }, []);
+
+    const hasPermission = (perm) => {
+        return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+    };
+
     const fetchRequests = async () => {
         setIsLoading(true);
         try {
@@ -365,20 +382,27 @@ export default function DepositRefundsPage() {
                                             <TableCell className="text-center pr-6">
                                                 {request.status === 'REQUESTED' ? (
                                                     <div className="flex gap-2 justify-center">
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => handleApproveClick(request)}
-                                                            className="bg-primary hover:bg-primary/90"
-                                                        >
-                                                            Approve
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="destructive"
-                                                            onClick={() => handleRejectClick(request)}
-                                                        >
-                                                            Reject
-                                                        </Button>
+                                                        {hasPermission('approve_refunds') && (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleApproveClick(request)}
+                                                                className="bg-primary hover:bg-primary/90"
+                                                            >
+                                                                Approve
+                                                            </Button>
+                                                        )}
+                                                        {hasPermission('reject_refunds') && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="destructive"
+                                                                onClick={() => handleRejectClick(request)}
+                                                            >
+                                                                Reject
+                                                            </Button>
+                                                        )}
+                                                        {!hasPermission('approve_refunds') && !hasPermission('reject_refunds') && (
+                                                            <span className="text-xs text-muted-foreground">-</span>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest">

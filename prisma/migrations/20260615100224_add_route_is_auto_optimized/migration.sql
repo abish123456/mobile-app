@@ -1,5 +1,5 @@
 -- DropIndex
-DROP INDEX "Route_serviceRouteId_date_idx";
+DROP INDEX IF EXISTS "Route_serviceRouteId_date_idx";
 
 -- AlterTable
 ALTER TABLE "Route" ADD COLUMN     "isAutoOptimized" BOOLEAN NOT NULL DEFAULT false;

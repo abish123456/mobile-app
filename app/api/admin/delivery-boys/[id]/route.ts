@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
-import { verifyAdminAuth, getAdminAuthErrorResponse } from "../../../../../lib/admin-auth";
+import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse, getAdminIdFromRequest } from "../../../../../lib/admin-auth";
+import { logAction } from "../../../../../lib/audit";
 import { getStartOfDayIST } from "../../../../../lib/timezone";
 // import { retroactivelyAssignOrders } from "../../../../../lib/order-assignment";
 
@@ -11,9 +12,11 @@ export async function PUT(
 ) {
   try {
     // Admin authentication check
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "edit_delivery_staff"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
+    
+    const adminId = await getAdminIdFromRequest(req);
 
     const { id } = await params;
     const body = await req.json();
@@ -41,11 +44,13 @@ export async function PUT(
       );
     }
 
-    // Check if delivery boy exists
-    const existingRes = await query<{ id: string }>(
-      `SELECT "id" FROM "DeliveryBoy" WHERE "id" = $1`,
+    // Check if delivery boy exists and get old data
+    const existingRes = await query<{ id: string, name: string, phone: string, active: boolean, onLeave: boolean }>(
+      `SELECT "id", "name", "phone", "active", "onLeave" FROM "DeliveryBoy" WHERE "id" = $1`,
       [id]
     );
+    
+    const oldData = existingRes.rows[0];
 
     if (existingRes.rows.length === 0) {
       return NextResponse.json(
@@ -152,6 +157,23 @@ export async function PUT(
         );
       }
     }
+    
+    const newRes = await query<{name: string, phone: string, active: boolean, onLeave: boolean}>(
+      `SELECT "name", "phone", "active", "onLeave" FROM "DeliveryBoy" WHERE "id" = $1`,
+      [id]
+    );
+    const newData = newRes.rows[0];
+
+    await logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'DELIVERY_STAFF',
+      entityId: id,
+      action: 'UPDATE',
+      oldData: { name: oldData?.name, phone: oldData?.phone, active: oldData?.active, onLeave: oldData?.onLeave },
+      newData: { name: newData?.name, phone: newData?.phone, active: newData?.active, onLeave: newData?.onLeave },
+      description: `Updated delivery staff: ${newData?.name || id}`
+    });
 
     return NextResponse.json({
       success: true,
@@ -172,17 +194,21 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!(await verifyAdminAuth(req))) {
-      return NextResponse.json(getAdminAuthErrorResponse(), { status: 401 });
+    if (!(await verifyAdminAuthWithPermission(req, "delete_delivery_staff"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
     }
+    
+    const adminId = await getAdminIdFromRequest(req);
 
     const { id } = await params;
 
     // Check if delivery boy exists
-    const existingRes = await query<{ id: string }>(
-      `SELECT "id" FROM "DeliveryBoy" WHERE "id" = $1`,
+    const existingRes = await query<{ id: string, name: string, phone: string }>(
+      `SELECT "id", "name", "phone" FROM "DeliveryBoy" WHERE "id" = $1`,
       [id]
     );
+    
+    const oldData = existingRes.rows[0];
 
     if (existingRes.rows.length === 0) {
       return NextResponse.json(
@@ -229,6 +255,17 @@ export async function DELETE(
        WHERE "id" = $2`,
       [new Date(), id]
     );
+    
+    await logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'DELIVERY_STAFF',
+      entityId: id,
+      action: 'DELETE',
+      oldData: { name: oldData?.name, phone: oldData?.phone },
+      newData: null,
+      description: `Deleted delivery staff: ${oldData?.name || id}`
+    });
 
     return NextResponse.json({
       success: true,

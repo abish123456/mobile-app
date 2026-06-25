@@ -56,6 +56,22 @@ export default function ServiceRoutesPage() {
     const [serviceRoutes, setServiceRoutes] = useState([]);
     const [activeServiceAreas, setActiveServiceAreas] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [adminPermissions, setAdminPermissions] = useState([]);
+
+    useEffect(() => {
+        try {
+            const perms = localStorage.getItem('adminPermissions');
+            if (perms) {
+                setAdminPermissions(JSON.parse(perms));
+            }
+        } catch (e) {
+            console.error('Failed to parse admin permissions', e);
+        }
+    }, []);
+
+    const hasPermission = (perm) => {
+        return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+    };
 
     // Dialogs
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -231,10 +247,12 @@ export default function ServiceRoutesPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button onClick={() => handleOpenDialog(null)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Route
-                    </Button>
+                    {hasPermission('create_routes') && (
+                        <Button onClick={() => handleOpenDialog(null)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Route
+                        </Button>
+                    )}
 
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                         <DialogContent className="max-w-lg">
@@ -400,10 +418,12 @@ export default function ServiceRoutesPage() {
                             <p className="text-muted-foreground mb-4">
                                 Create your first route to grouping service areas.
                             </p>
-                            <Button onClick={() => handleOpenDialog(null)}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                create Route
-                            </Button>
+                            {hasPermission('create_routes') && (
+                                <Button onClick={() => handleOpenDialog(null)}>
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    create Route
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         <Table className={cn("rounded-md border transition-opacity", isLoading && "opacity-50 pointer-events-none")}>
@@ -411,7 +431,9 @@ export default function ServiceRoutesPage() {
                                 <TableRow>
                                     <TableHead>Route Name</TableHead>
                                     <TableHead>Assigned Pincodes</TableHead>
-                                    <TableHead>Actions</TableHead>
+                                    {(hasPermission('edit_routes') || hasPermission('delete_routes')) && (
+                                        <TableHead>Actions</TableHead>
+                                    )}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -436,30 +458,36 @@ export default function ServiceRoutesPage() {
                                                 )}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="align-top w-[100px]">
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleOpenDialog(route)}
-                                                    title="Edit Route"
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-destructive hover:text-black"
-                                                    onClick={() => {
-                                                        setSelectedRoute(route);
-                                                        setIsDeleteDialogOpen(true);
-                                                    }}
-                                                    title="Delete Route"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
+                                        {(hasPermission('edit_routes') || hasPermission('delete_routes')) && (
+                                            <TableCell className="align-top w-[100px]">
+                                                <div className="flex items-center gap-2">
+                                                    {hasPermission('edit_routes') && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => handleOpenDialog(route)}
+                                                            title="Edit Route"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {hasPermission('delete_routes') && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-destructive hover:text-black"
+                                                            onClick={() => {
+                                                                setSelectedRoute(route);
+                                                                setIsDeleteDialogOpen(true);
+                                                            }}
+                                                            title="Delete Route"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 ))}
                             </TableBody>

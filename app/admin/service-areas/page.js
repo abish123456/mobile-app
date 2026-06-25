@@ -41,6 +41,22 @@ import { cn } from '../../../lib/utils';
 export default function ServiceAreasPage() {
     const [serviceAreas, setServiceAreas] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [adminPermissions, setAdminPermissions] = useState([]);
+
+    useEffect(() => {
+        try {
+            const perms = localStorage.getItem('adminPermissions');
+            if (perms) {
+                setAdminPermissions(JSON.parse(perms));
+            }
+        } catch (e) {
+            console.error('Failed to parse admin permissions', e);
+        }
+    }, []);
+
+    const hasPermission = (perm) => {
+        return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+    };
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [selectedArea, setSelectedArea] = useState(null);
@@ -196,10 +212,12 @@ export default function ServiceAreasPage() {
                             className="pl-9"
                         />
                     </div>
-                    <Button onClick={() => handleOpenDialog(null)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Service Area
-                    </Button>
+                    {hasPermission('create_service_areas') && (
+                        <Button onClick={() => handleOpenDialog(null)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Service Area
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -232,7 +250,9 @@ export default function ServiceAreasPage() {
                                             <TableHead>Pincode</TableHead>
                                             <TableHead>Area Name</TableHead>
                                             <TableHead>Status</TableHead>
-                                            <TableHead>Actions</TableHead>
+                                            {(hasPermission('edit_service_areas') || hasPermission('delete_service_areas')) && (
+                                                <TableHead>Actions</TableHead>
+                                            )}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -251,29 +271,35 @@ export default function ServiceAreasPage() {
                                                         </Badge>
                                                     )}
                                                 </TableCell>
-                                                <TableCell >
-                                                    <div>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => handleOpenDialog(area)}
-                                                            className="h-8 w-8"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8 text-destructive hover:text-black"
-                                                            onClick={() => {
-                                                                setSelectedArea(area);
-                                                                setIsDeleteDialogOpen(true);
-                                                            }}
-                                                        >
-                                                            {/* <Trash2 className="h-4 w-4" /> */}
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
+                                                {(hasPermission('edit_service_areas') || hasPermission('delete_service_areas')) && (
+                                                    <TableCell >
+                                                        <div>
+                                                            {hasPermission('edit_service_areas') && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => handleOpenDialog(area)}
+                                                                    className="h-8 w-8"
+                                                                >
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {hasPermission('delete_service_areas') && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-destructive hover:text-black"
+                                                                    onClick={() => {
+                                                                        setSelectedArea(area);
+                                                                        setIsDeleteDialogOpen(true);
+                                                                    }}
+                                                                >
+                                                                    {/* <Trash2 className="h-4 w-4" /> */}
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                )}
                                             </TableRow>
                                         ))}
                                     </TableBody>

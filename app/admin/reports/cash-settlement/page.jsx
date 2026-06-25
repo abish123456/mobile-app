@@ -49,6 +49,23 @@ export default function CashSettlementReportPage() {
   const [reportData, setReportData] = useState([]);
   const [error, setError] = useState('');
 
+  const [adminPermissions, setAdminPermissions] = useState([]);
+
+  useEffect(() => {
+    try {
+      const perms = localStorage.getItem('adminPermissions');
+      if (perms) {
+        setAdminPermissions(JSON.parse(perms));
+      }
+    } catch (e) {
+      console.error('Failed to parse admin permissions', e);
+    }
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
+
   const [isStartDatePickerOpen, setIsStartDatePickerOpen] = useState(false);
   const [isEndDatePickerOpen, setIsEndDatePickerOpen] = useState(false);
 
@@ -364,12 +381,12 @@ export default function CashSettlementReportPage() {
           </h1>
           <p className="text-gray-500 mt-1">Reconcile route collections, can deposits, online sales, and net cash-in-hand figures.</p>
         </div>
-        {!isLoading && reportData.length > 0 && (
-          <div className="flex gap-3 print:hidden">
+        {!isLoading && reportData.length > 0 && hasPermission('export_cash_settlement_reports') && (
+          <div className="flex gap-3 print:hidden mt-4 md:mt-0">
             <Button
               onClick={handlePrint}
               variant="outline"
-              className="border-blue-600 text-blue-600 hover:bg-blue-50 shadow-md transition-all hover:scale-[1.02] gap-2 h-11 px-5"
+              className="bg-white hover:bg-gray-50 text-gray-700 border-gray-300 shadow-sm transition-all hover:scale-[1.02] gap-2 h-11 px-5 hidden sm:flex"
             >
               <Printer className="h-5 w-5" /> Print
             </Button>

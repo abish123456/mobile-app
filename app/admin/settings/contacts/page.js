@@ -45,6 +45,20 @@ export default function SupportContactsPage() {
   const [selectedContact, setSelectedContact] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
+  const [adminPermissions, setAdminPermissions] = useState([]);
+  const [isPermsLoading, setIsPermsLoading] = useState(true);
+
+  useEffect(() => {
+    const perms = localStorage.getItem('adminPermissions');
+    if (perms) {
+      setAdminPermissions(JSON.parse(perms));
+    }
+    setIsPermsLoading(false);
+  }, []);
+
+  const hasPermission = (perm) => {
+    return adminPermissions.includes('SUPER_ADMIN') || adminPermissions.includes(perm);
+  };
 
   const [formData, setFormData] = useState({
     type: 'PHONE',
@@ -174,6 +188,19 @@ export default function SupportContactsPage() {
     }
   };
 
+  if (isPermsLoading) {
+    return <div className="flex justify-center items-center h-[60vh]"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
+
+  if (!hasPermission('view_support_contacts')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh]">
+        <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have permission to view Support Contacts.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -183,14 +210,15 @@ export default function SupportContactsPage() {
           <p className="text-muted-foreground">Manage phone numbers and emails shown to customers</p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog(null)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Support Contact
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
+        {hasPermission('create_support_contacts') && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog(null)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Support Contact
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
             <DialogHeader>
               <DialogTitle>
                 {selectedContact ? 'Edit Support Contact' : 'Add Support Contact'}
@@ -280,6 +308,7 @@ export default function SupportContactsPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Contacts Table Card */}
@@ -304,10 +333,12 @@ export default function SupportContactsPage() {
               <p className="text-muted-foreground mb-4">
                 Add your first support contact to get started
               </p>
-              <Button onClick={() => handleOpenDialog(null)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Support Contact
-              </Button>
+              {hasPermission('create_support_contacts') && (
+                <Button onClick={() => handleOpenDialog(null)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Support Contact
+                </Button>
+              )}
             </div>
           ) : (
             <div className={`rounded-md border transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -318,7 +349,9 @@ export default function SupportContactsPage() {
                     <TableHead className="w-[170px]">Label</TableHead>
                     <TableHead className="w-[180px]">Phone / Email</TableHead>
                     <TableHead className="w-[120px]">Status</TableHead>
-                    <TableHead className="w-[120px] pl-7">Actions</TableHead>
+                    {(hasPermission('edit_support_contacts') || hasPermission('delete_support_contacts')) && (
+                      <TableHead className="w-[120px] pl-7">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -354,51 +387,59 @@ export default function SupportContactsPage() {
                           {contact.active ? 'Active' : 'Inactive'}
                         </span>
                       </TableCell>
-                      <TableCell className="w-[120px]">
-                        <div className="flex items-center gap-1 flex-nowrap">
-                          {/* Edit */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(contact)}
-                            disabled={isSubmitting || togglingId === contact.id}
-                            title="Edit"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {/* Deactivate / Activate */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleToggleActive(contact)}
-                            disabled={togglingId === contact.id || isSubmitting}
-                            title={contact.active ? 'Deactivate' : 'Activate'}
-                            className="text-muted-foreground hover:text-primary"
-                          >
-                            {togglingId === contact.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : contact.active ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
+                      {(hasPermission('edit_support_contacts') || hasPermission('delete_support_contacts')) && (
+                        <TableCell className="w-[120px]">
+                          <div className="flex items-center gap-1 flex-nowrap">
+                            {/* Edit */}
+                            {hasPermission('edit_support_contacts') && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleOpenDialog(contact)}
+                                  disabled={isSubmitting || togglingId === contact.id}
+                                  title="Edit"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                {/* Deactivate / Activate */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleToggleActive(contact)}
+                                  disabled={togglingId === contact.id || isSubmitting}
+                                  title={contact.active ? 'Deactivate' : 'Activate'}
+                                  className="text-muted-foreground hover:text-primary"
+                                >
+                                  {togglingId === contact.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : contact.active ? (
+                                    <EyeOff className="h-4 w-4" />
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </>
                             )}
-                          </Button>
-                          {/* Delete */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setSelectedContact(contact);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                            disabled={isSubmitting || togglingId === contact.id}
-                            className="text-destructive hover:text-black"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                            {/* Delete */}
+                            {hasPermission('delete_support_contacts') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setSelectedContact(contact);
+                                  setIsDeleteDialogOpen(true);
+                                }}
+                                disabled={isSubmitting || togglingId === contact.id}
+                                className="text-destructive hover:text-black"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
