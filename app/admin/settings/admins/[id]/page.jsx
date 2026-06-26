@@ -28,7 +28,7 @@ export default function AdminFormPage({ params }) {
         email: '',
         name: '',
         password: '',
-        roleId: 'super_admin', // 'super_admin' represents null roleId
+        roleIds: [],
         active: true
     });
 
@@ -85,7 +85,7 @@ export default function AdminFormPage({ params }) {
                     email: data.admin.email || '',
                     name: data.admin.name || '',
                     password: '', // Don't populate password
-                    roleId: data.admin.roleId || 'super_admin',
+                    roleIds: data.admin.roles ? data.admin.roles.map(r => r.id) : [],
                     active: data.admin.active
                 });
             } else {
@@ -119,9 +119,6 @@ export default function AdminFormPage({ params }) {
             const method = isEditMode ? 'PUT' : 'POST';
             
             const payload = { ...formData };
-            if (payload.roleId === 'super_admin') {
-                payload.roleId = null;
-            }
             
             const res = await adminFetch(url, {
                 method,
@@ -224,22 +221,42 @@ export default function AdminFormPage({ params }) {
                                 />
                             </div>
                             
-                            <div className="space-y-2">
-                                <Label htmlFor="role">Role Assignment</Label>
-                                <Select 
-                                    value={formData.roleId || 'super_admin'} 
-                                    onValueChange={(val) => setFormData({...formData, roleId: val})}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="super_admin">Super Admin (All Access)</SelectItem>
-                                        {roles.map(role => (
-                                            <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="space-y-2 col-span-1 md:col-span-2">
+                                <Label>Role Assignment</Label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2 p-4 border rounded-md">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="role-super-admin" 
+                                            checked={formData.roleIds.length === 0}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) setFormData({...formData, roleIds: []});
+                                            }}
+                                        />
+                                        <Label htmlFor="role-super-admin" className="cursor-pointer font-semibold">
+                                            Super Admin (All Access)
+                                        </Label>
+                                    </div>
+                                    {roles.map(role => (
+                                        <div key={role.id} className="flex items-center space-x-2">
+                                            <Checkbox 
+                                                id={`role-${role.id}`}
+                                                checked={formData.roleIds.includes(role.id)}
+                                                onCheckedChange={(checked) => {
+                                                    let newRoles = [...formData.roleIds];
+                                                    if (checked) {
+                                                        newRoles.push(role.id);
+                                                    } else {
+                                                        newRoles = newRoles.filter(id => id !== role.id);
+                                                    }
+                                                    setFormData({...formData, roleIds: newRoles});
+                                                }}
+                                            />
+                                            <Label htmlFor={`role-${role.id}`} className="cursor-pointer">
+                                                {role.name}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                             
                             <div className="space-y-2 flex flex-col justify-center mt-2">

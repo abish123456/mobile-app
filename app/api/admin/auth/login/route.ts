@@ -4,6 +4,7 @@ import { checkRateLimit, RATE_LIMITS, getRateLimitHeaders } from "../../../../..
 import { logAction } from "../../../../../lib/audit";
 import { createSecureResponse } from "../../../../../lib/security-headers";
 import { createRequestLogger } from "../../../../../lib/request-logger";
+import { query } from "../../../../../lib/db";
 
 export async function POST(req: NextRequest) {
   const logger = createRequestLogger()(req);
@@ -55,11 +56,29 @@ export async function POST(req: NextRequest) {
       description: `Admin ${username} logged in successfully`,
     });
 
+    // Fetch user's name and role names for the UI
+    const userRes = await query(
+      `SELECT a.name, COALESCE(
+         (SELECT string_agg(r.name, ', ')
+          FROM "AdminRole" r
+          JOIN "_AdminToAdminRole" j ON j."B" = r.id
+          WHERE j."A" = a.id
+         ), 'Super Admin'
+       ) as "roleNames"
+       FROM "Admin" a WHERE a.id = $1`,
+      [result.adminId]
+    );
+
+    const adminName = userRes.rows[0]?.name || username;
+    const adminRoleNames = userRes.rows[0]?.roleNames || 'Super Admin';
+
     const response = createSecureResponse(
       {
         success: true,
         token,
         permissions,
+        adminName,
+        adminRoleNames,
         message: "Login successful",
       },
       {

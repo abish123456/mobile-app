@@ -19,9 +19,13 @@ export async function POST(req: Request) {
 
     // Find the Admin user by email or username using raw SQL
     const adminRes = await query(
-      `SELECT a.*, ar."name" as "roleName"
+      `SELECT a.*,
+        (SELECT json_agg(ar."name")
+         FROM "AdminRole" ar
+         JOIN "_AdminToAdminRole" atr ON ar.id = atr."B"
+         WHERE atr."A" = a."id"
+        ) as "roleNames"
        FROM "Admin" a
-       LEFT JOIN "AdminRole" ar ON a."roleId" = ar."id"
        WHERE (a."email" = $1 OR a."username" = $1) AND a."active" = true
        LIMIT 1`,
       [identifier]
@@ -48,8 +52,10 @@ export async function POST(req: Request) {
       );
     }
 
+    const roleNames = admin.roleNames || [];
+
     // Check role to ensure they are delivery staff
-    if (admin.roleName !== "Delivery Staff") {
+    if (!roleNames.includes("Delivery Staff")) {
       return NextResponse.json(
         { success: false, message: "Access denied. Only Delivery Staff can log in here." },
         { status: 403 }
@@ -85,7 +91,7 @@ export async function POST(req: Request) {
       {
         adminId: admin.id,
         deliveryBoyId: activeProfile.id,
-        role: admin.roleName,
+        roles: roleNames,
       },
       JWT_SECRET,
       { expiresIn: "7d" } // Token expires in 7 days

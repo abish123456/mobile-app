@@ -18,10 +18,16 @@ export async function GET(req: NextRequest) {
 
     try {
         const adminsRes = await query(`
-            SELECT a.id, a.email, a.username, a.name, a.active, a."roleId", a."createdAt", a."updatedAt", r.name as "roleName",
-                   db."phone" as "deliveryBoyPhone"
+            SELECT a.id, a.email, a.username, a.name, a.active, a."createdAt", a."updatedAt",
+                   db."phone" as "deliveryBoyPhone",
+                   COALESCE(
+                     (SELECT json_agg(json_build_object('id', ar.id, 'name', ar.name))
+                      FROM "AdminRole" ar
+                      JOIN "_AdminToAdminRole" atr ON ar.id = atr."B"
+                      WHERE atr."A" = a.id),
+                     '[]'::json
+                   ) as "roles"
             FROM "Admin" a
-            LEFT JOIN "AdminRole" r ON a."roleId" = r.id
             LEFT JOIN "DeliveryBoy" db ON db."adminId" = a.id
             ORDER BY a."createdAt" DESC
         `);
@@ -51,7 +57,7 @@ export async function POST(req: NextRequest) {
         const email = (body?.email || "").toString().trim();
         const name = (body?.name || "").toString().trim();
         const password = (body?.password || "").toString();
-        const roleId = body?.roleId || null;
+        const roleIds = Array.isArray(body?.roleIds) ? body.roleIds : [];
         const active = body?.active ?? true;
         let phone = (body?.phone || "").toString().trim();
 
@@ -82,19 +88,24 @@ export async function POST(req: NextRequest) {
         const now = new Date();
 
         const insertRes = await query(
-            `INSERT INTO "Admin" (id, username, email, name, "passwordHash", active, "roleId", "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             RETURNING id, username, email, name, active, "roleId"`,
-            [id, username, email, name, passwordHash, active, roleId, now, now]
+            `INSERT INTO "Admin" (id, username, email, name, "passwordHash", active, "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING id, username, email, name, active`,
+            [id, username, email, name, passwordHash, active, now, now]
         );
 
-        // Check if role is "Delivery Staff"
         let isDeliveryStaff = false;
-        if (roleId) {
-            const roleRes = await query(`SELECT name FROM "AdminRole" WHERE id = $1`, [roleId]);
-            if (roleRes.rows.length > 0 && roleRes.rows[0].name.toLowerCase() === 'delivery staff') {
-                isDeliveryStaff = true;
+        const assignedRoleNames: string[] = [];
+
+        if (roleIds.length > 0) {
+            for (const rId of roleIds) {
+                await query(`INSERT INTO "_AdminToAdminRole" ("A", "B") VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, rId]);
             }
+            const rolesRes = await query(`SELECT name FROM "AdminRole" WHERE id = ANY($1)`, [roleIds]);
+            rolesRes.rows.forEach(r => {
+                assignedRoleNames.push(r.name);
+                if (r.name.toLowerCase() === 'delivery staff') isDeliveryStaff = true;
+            });
         }
 
         if (isDeliveryStaff) {
@@ -123,8 +134,8 @@ export async function POST(req: NextRequest) {
             entityId: id,
             action: 'CREATE',
             oldData: null,
-            newData: insertRes.rows[0],
-            description: `Admin created a new team member (${name})`
+            newData: { ...insertRes.rows[0], roles: assignedRoleNames },
+            description: `Admin created a new team member (${name}) with roles: [${assignedRoleNames.join(', ')}]`
         });
 
         return NextResponse.json({

@@ -113,6 +113,12 @@ const PERMISSION_GROUPS = [
             { id: 'export_reassigned_orders_reports', label: 'Export Reassigned Orders Reports' },
             { id: 'view_route_wise_reports', label: 'View Route-wise Report' },
             { id: 'export_route_wise_reports', label: 'Export Route-wise Report' },
+            { id: 'view_deposit_reports', label: 'View Deposit Reports' },
+            { id: 'export_deposit_reports', label: 'Export Deposit Reports' },
+            { id: 'view_deposit_reports_count', label: 'View Deposit Reports Count' },
+            { id: 'view_product_sales_reports', label: 'View Product Sales Reports' },
+            { id: 'export_product_sales_reports', label: 'Export Product Sales Reports' },
+            { id: 'view_product_sales_reports_count', label: 'View Product Sales Reports Count' },
             { id: 'view_cash_settlement_reports', label: 'View Cash Settlement' },
             { id: 'export_cash_settlement_reports', label: 'Export Cash Settlement' },
         ]

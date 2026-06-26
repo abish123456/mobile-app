@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '../../../../../lib/db';
-import { verifyAdminAuth } from '../../../../../lib/admin-auth';
+import { verifyAdminAuthWithPermission } from '../../../../../lib/admin-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const admin = await verifyAdminAuth(req);
-    if (!admin) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    const isAuthorized = await verifyAdminAuthWithPermission(req, 'view_deposit_reports');
+    if (!isAuthorized) {
+      return NextResponse.json({ success: false, message: 'Unauthorized: Missing view_deposit_reports permission' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

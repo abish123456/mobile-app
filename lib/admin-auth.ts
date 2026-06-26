@@ -118,27 +118,33 @@ export async function getAdminIdFromRequest(req: NextRequest): Promise<string | 
 // Check if an admin has a specific granular permission (or any of an array of permissions)
 export async function checkAdminPermission(adminId: string, requiredPermission: string | string[]): Promise<boolean> {
   try {
-    const adminRes = await query<{ roleId: string | null }>(
-      `SELECT "roleId" FROM "Admin" WHERE "id" = $1 AND "active" = true`,
+    // Verify the admin is active
+    const adminRes = await query(
+      `SELECT "id" FROM "Admin" WHERE "id" = $1 AND "active" = true`,
       [adminId]
     );
 
     if (adminRes.rows.length === 0) return false;
 
-    const { roleId } = adminRes.rows[0];
-
-    // If roleId is null, assume they are the Super Admin and have all permissions
-    if (!roleId) return true;
-
-    // Otherwise, fetch the role's permissions
+    // Fetch all roles for this admin
     const roleRes = await query<{ permissions: string[] }>(
-      `SELECT "permissions" FROM "AdminRole" WHERE "id" = $1`,
-      [roleId]
+      `SELECT ar.permissions
+       FROM "AdminRole" ar
+       JOIN "_AdminToAdminRole" atr ON ar.id = atr."B"
+       WHERE atr."A" = $1`,
+      [adminId]
     );
 
-    if (roleRes.rows.length === 0) return false;
+    // If no roles are found, assume they are the Super Admin and have all permissions
+    if (roleRes.rows.length === 0) return true;
 
-    const permissions = roleRes.rows[0].permissions || [];
+    // Flatten and deduplicate permissions from all assigned roles
+    const allPermissions = new Set<string>();
+    roleRes.rows.forEach(row => {
+      (row.permissions || []).forEach(perm => allPermissions.add(perm));
+    });
+
+    const permissions = Array.from(allPermissions);
     
     if (Array.isArray(requiredPermission)) {
       return requiredPermission.some(perm => permissions.includes(perm));
@@ -182,23 +188,29 @@ export function getAdminPermissionErrorResponse() {
 // Get all permissions for a specific admin (used during login to send to frontend)
 export async function getAdminPermissions(adminId: string): Promise<string[]> {
   try {
-    const adminRes = await query<{ roleId: string | null }>(
-      `SELECT "roleId" FROM "Admin" WHERE "id" = $1 AND "active" = true`,
+    const adminRes = await query(
+      `SELECT "id" FROM "Admin" WHERE "id" = $1 AND "active" = true`,
       [adminId]
     );
 
     if (adminRes.rows.length === 0) return [];
     
-    const { roleId } = adminRes.rows[0];
-    if (!roleId) return ['SUPER_ADMIN']; // Indicator that they have all permissions
-
     const roleRes = await query<{ permissions: string[] }>(
-      `SELECT "permissions" FROM "AdminRole" WHERE "id" = $1`,
-      [roleId]
+      `SELECT ar.permissions
+       FROM "AdminRole" ar
+       JOIN "_AdminToAdminRole" atr ON ar.id = atr."B"
+       WHERE atr."A" = $1`,
+      [adminId]
     );
 
-    if (roleRes.rows.length === 0) return [];
-    return roleRes.rows[0].permissions || [];
+    if (roleRes.rows.length === 0) return ['SUPER_ADMIN']; // Indicator that they have all permissions
+
+    const allPermissions = new Set<string>();
+    roleRes.rows.forEach(row => {
+      (row.permissions || []).forEach(perm => allPermissions.add(perm));
+    });
+
+    return Array.from(allPermissions);
   } catch (error) {
     console.error("Error getting admin permissions:", error);
     return [];

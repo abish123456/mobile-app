@@ -30,16 +30,21 @@ export default function AdminHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const [adminEmail, setAdminEmail] = useState(null);
+  const [adminName, setAdminName] = useState(null);
+  const [adminRoleNames, setAdminRoleNames] = useState(null);
 
   useEffect(() => {
     // Only access localStorage on client side after mount
-    const email = localStorage.getItem('adminEmail');
-    setAdminEmail(email);
+    setAdminEmail(localStorage.getItem('adminEmail'));
+    setAdminName(localStorage.getItem('adminName') || 'Admin');
+    setAdminRoleNames(localStorage.getItem('adminRoleNames') || 'Super Admin');
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminEmail');
+    localStorage.removeItem('adminName');
+    localStorage.removeItem('adminRoleNames');
     localStorage.removeItem('adminPermissions');
     router.push('/admin/login');
   };
@@ -47,7 +52,12 @@ export default function AdminHeader() {
   // Get page title based on current route
   const getPageTitle = () => {
     if (pathname && pathname.startsWith('/admin') && pathname !== '/admin/login') {
-      return 'Admin';
+      // If it's the dashboard home, just show Dashboard
+      if (pathname === '/admin') {
+        return 'Dashboard';
+      }
+      // For other pages, we'll show their Role Name as requested
+      return adminRoleNames || 'Admin';
     }
     return 'Dashboard';
   };
@@ -61,7 +71,7 @@ export default function AdminHeader() {
         {/* Left: Mobile toggle + Page Title */}
         <div className="flex items-center gap-3 min-w-0">
           <SidebarTrigger className="xl:hidden -ml-1" aria-label="Toggle menu" />
-          <h1 className="text-xl sm:text-2xl font-bold text-black truncate">{getPageTitle()}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-black capitalize truncate">{getPageTitle()}</h1>
         </div>
 
         {/* Right: Search and User Profile */}
@@ -92,8 +102,8 @@ export default function AdminHeader() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">Admin</p>
-                  <p className="text-xs text-muted-foreground">{adminEmail || 'admin@watercan.com'}</p>
+                  <p className="text-sm font-medium">{adminName}</p>
+                  <p className="text-xs text-muted-foreground">{adminRoleNames} • {adminEmail}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

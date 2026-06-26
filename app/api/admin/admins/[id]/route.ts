@@ -17,8 +17,15 @@ export async function GET(
         const { id } = resolvedParams;
 
         const adminRes = await query(
-            `SELECT a.id, a.email, a.username, a.name, a.active, a."roleId", a."createdAt", a."updatedAt",
-                    db.phone as "deliveryBoyPhone"
+            `SELECT a.id, a.email, a.username, a.name, a.active, a."createdAt", a."updatedAt",
+                    db.phone as "deliveryBoyPhone",
+                    COALESCE(
+                      (SELECT json_agg(json_build_object('id', ar.id, 'name', ar.name))
+                       FROM "AdminRole" ar
+                       JOIN "_AdminToAdminRole" atr ON ar.id = atr."B"
+                       WHERE atr."A" = a.id),
+                      '[]'::json
+                    ) as "roles"
              FROM "Admin" a
              LEFT JOIN "DeliveryBoy" db ON db."adminId" = a.id
              WHERE a.id = $1`,
@@ -63,7 +70,7 @@ export async function PUT(
         const email = (body?.email || "").toString().trim();
         const name = (body?.name || "").toString().trim();
         const password = (body?.password || "").toString();
-        const roleId = body?.roleId || null;
+        const roleIds = Array.isArray(body?.roleIds) ? body.roleIds : [];
         const active = body?.active ?? true;
         let phone = (body?.phone || "").toString().trim();
 
@@ -75,7 +82,7 @@ export async function PUT(
         }
 
         // Check if admin exists
-        const adminRes = await query(`SELECT id, username, email, name, active, "roleId" FROM "Admin" WHERE id = $1`, [id]);
+        const adminRes = await query(`SELECT id, username, email, name, active FROM "Admin" WHERE id = $1`, [id]);
         if (adminRes.rows.length === 0) {
             return NextResponse.json(
                 { success: false, message: "Admin not found" },
@@ -83,6 +90,13 @@ export async function PUT(
             );
         }
         const oldAdmin = adminRes.rows[0];
+
+        // Fetch old roles to log the diff
+        const oldRolesRes = await query(
+            `SELECT ar.name FROM "AdminRole" ar JOIN "_AdminToAdminRole" atr ON ar.id = atr."B" WHERE atr."A" = $1`,
+            [id]
+        );
+        const oldRoleNames = oldRolesRes.rows.map(r => r.name);
 
         // Check if another admin has the same username or email
         const existCheckRes = await query(
@@ -104,29 +118,40 @@ export async function PUT(
             const passwordHash = hashPasswordForStorage(password);
             updateRes = await query(
                 `UPDATE "Admin"
-                 SET username = $1, email = $2, name = $3, "passwordHash" = $4, active = $5, "roleId" = $6, "updatedAt" = $7
-                 WHERE id = $8
-                 RETURNING id, username, email, name, active, "roleId"`,
-                [username, email, name, passwordHash, active, roleId, now, id]
+                 SET username = $1, email = $2, name = $3, "passwordHash" = $4, active = $5, "updatedAt" = $6
+                 WHERE id = $7
+                 RETURNING id, username, email, name, active`,
+                [username, email, name, passwordHash, active, now, id]
             );
         } else {
             updateRes = await query(
                 `UPDATE "Admin"
-                 SET username = $1, email = $2, name = $3, active = $4, "roleId" = $5, "updatedAt" = $6
-                 WHERE id = $7
-                 RETURNING id, username, email, name, active, "roleId"`,
-                [username, email, name, active, roleId, now, id]
+                 SET username = $1, email = $2, name = $3, active = $4, "updatedAt" = $5
+                 WHERE id = $6
+                 RETURNING id, username, email, name, active`,
+                [username, email, name, active, now, id]
             );
         }
 
-        // Check if role is "Delivery Staff"
+        // Delete old roles
+        await query(`DELETE FROM "_AdminToAdminRole" WHERE "A" = $1`, [id]);
+
         let isDeliveryStaff = false;
-        if (roleId) {
-            const roleRes = await query(`SELECT name FROM "AdminRole" WHERE id = $1`, [roleId]);
-            if (roleRes.rows.length > 0 && roleRes.rows[0].name.toLowerCase() === 'delivery staff') {
-                isDeliveryStaff = true;
+        const newRoleNames: string[] = [];
+
+        if (roleIds.length > 0) {
+            for (const rId of roleIds) {
+                await query(`INSERT INTO "_AdminToAdminRole" ("A", "B") VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, rId]);
             }
+            const rolesRes = await query(`SELECT name FROM "AdminRole" WHERE id = ANY($1)`, [roleIds]);
+            rolesRes.rows.forEach(r => {
+                newRoleNames.push(r.name);
+                if (r.name.toLowerCase() === 'delivery staff') isDeliveryStaff = true;
+            });
         }
+        
+        const addedRoles = newRoleNames.filter(r => !oldRoleNames.includes(r));
+        const removedRoles = oldRoleNames.filter(r => !newRoleNames.includes(r));
 
         if (isDeliveryStaff && phone) {
             if (!phone.startsWith('+91')) {
@@ -152,6 +177,11 @@ export async function PUT(
              await query(`UPDATE "DeliveryBoy" SET active = false, "updatedAt" = $1 WHERE "adminId" = $2`, [now, id]);
         }
 
+        let roleAuditDesc = '';
+        if (addedRoles.length > 0 || removedRoles.length > 0) {
+            roleAuditDesc = ` (Roles Added: [${addedRoles.join(', ')}], Removed: [${removedRoles.join(', ')}])`;
+        }
+
         const adminId = await getAdminIdFromRequest(req);
         logAction({
             actorId: adminId,
@@ -159,9 +189,9 @@ export async function PUT(
             entity: 'ADMIN',
             entityId: id,
             action: 'UPDATE',
-            oldData: oldAdmin,
-            newData: updateRes.rows[0],
-            description: `Admin updated team member details (${name})`
+            oldData: { ...oldAdmin, roles: oldRoleNames },
+            newData: { ...updateRes.rows[0], roles: newRoleNames },
+            description: `Admin updated team member details for ${name}${roleAuditDesc}`
         });
 
         return NextResponse.json({

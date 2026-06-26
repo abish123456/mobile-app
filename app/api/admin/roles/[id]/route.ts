@@ -78,6 +78,14 @@ export async function PUT(
         }
         const oldRole = roleRes.rows[0];
 
+        // Prevent renaming the critical "Delivery Staff" role
+        if (oldRole.name === "Delivery Staff" && name !== "Delivery Staff") {
+            return NextResponse.json(
+                { success: false, message: "The 'Delivery Staff' role name is required by the system and cannot be renamed." },
+                { status: 400 }
+            );
+        }
+
         // Check if another role has the same name
         const nameCheckRes = await query(
             `SELECT id FROM "AdminRole" WHERE name = $1 AND id != $2`,
@@ -140,9 +148,8 @@ export async function DELETE(
         const resolvedParams = await Promise.resolve(context.params);
         const { id } = resolvedParams;
 
-        // Check if role is in use
         const adminsUsingRole = await query(
-            `SELECT id FROM "Admin" WHERE "roleId" = $1 LIMIT 1`,
+            `SELECT "A" FROM "_AdminToAdminRole" WHERE "B" = $1 LIMIT 1`,
             [id]
         );
 
@@ -154,7 +161,18 @@ export async function DELETE(
         }
 
         const roleRes = await query(`SELECT name FROM "AdminRole" WHERE id = $1`, [id]);
+        if (roleRes.rows.length === 0) {
+             return NextResponse.json({ success: false, message: "Role not found" }, { status: 404 });
+        }
         const oldRole = roleRes.rows[0];
+
+        // Prevent deleting the critical "Delivery Staff" role
+        if (oldRole.name === "Delivery Staff") {
+             return NextResponse.json(
+                { success: false, message: "The 'Delivery Staff' role is required by the system and cannot be deleted." },
+                { status: 400 }
+            );
+        }
 
         await query(`DELETE FROM "AdminRole" WHERE id = $1`, [id]);
 

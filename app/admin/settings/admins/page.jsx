@@ -48,7 +48,7 @@ export default function AdminsPage() {
         password: '',
         name: '',
         phone: '',
-        roleId: 'super_admin',
+        roleIds: [],
         active: true
     });
 
@@ -136,9 +136,6 @@ export default function AdminsPage() {
         setIsSaving(true);
         try {
             const payload = { ...formData };
-            if (payload.roleId === 'super_admin') {
-                payload.roleId = null;
-            }
             
             const isEdit = !!formData.id;
             const url = isEdit ? `/api/admin/admins/${formData.id}` : '/api/admin/admins';
@@ -160,7 +157,7 @@ export default function AdminsPage() {
                     password: '',
                     name: '',
                     phone: '',
-                    roleId: 'super_admin',
+                    roleIds: [],
                     active: true
                 });
                 fetchAdmins();
@@ -243,26 +240,45 @@ export default function AdminsPage() {
                                     required={!formData.id}
                                 />
                             </div>
-                            
-                            <div className="space-y-2">
-                                <Label htmlFor="role">Role Assignment</Label>
-                                <Select 
-                                    value={formData.roleId || 'super_admin'} 
-                                    onValueChange={(val) => setFormData({...formData, roleId: val})}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select a role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="super_admin">Super Admin (All Access)</SelectItem>
-                                        {roles.map(role => (
-                                            <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="space-y-2 col-span-1 md:col-span-2">
+                                <Label>Role Assignment</Label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2 p-4 border rounded-md">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox 
+                                            id="role-super-admin" 
+                                            checked={formData.roleIds.length === 0}
+                                            onCheckedChange={(checked) => {
+                                                if (checked) setFormData({...formData, roleIds: []});
+                                            }}
+                                        />
+                                        <Label htmlFor="role-super-admin" className="cursor-pointer font-semibold">
+                                            Super Admin (All Access)
+                                        </Label>
+                                    </div>
+                                    {roles.map(role => (
+                                        <div key={role.id} className="flex items-center space-x-2">
+                                            <Checkbox 
+                                                id={`role-${role.id}`}
+                                                checked={formData.roleIds.includes(role.id)}
+                                                onCheckedChange={(checked) => {
+                                                    let newRoles = [...formData.roleIds];
+                                                    if (checked) {
+                                                        newRoles.push(role.id);
+                                                    } else {
+                                                        newRoles = newRoles.filter(id => id !== role.id);
+                                                    }
+                                                    setFormData({...formData, roleIds: newRoles});
+                                                }}
+                                            />
+                                            <Label htmlFor={`role-${role.id}`} className="cursor-pointer">
+                                                {role.name}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
-                            {roles.find(r => r.id === formData.roleId)?.name?.toLowerCase() === 'delivery staff' && (
+                            {formData.roleIds.some(rId => roles.find(r => r.id === rId)?.name?.toLowerCase() === 'delivery staff') && (
                                 <div className="space-y-2">
                                     <Label htmlFor="phone">Phone Number <span className="text-destructive">*</span></Label>
                                     <Input 
@@ -270,7 +286,7 @@ export default function AdminsPage() {
                                         value={formData.phone || ''}
                                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
                                         placeholder="e.g. +919876543210"
-                                        required={roles.find(r => r.id === formData.roleId)?.name?.toLowerCase() === 'delivery staff'}
+                                        required={formData.roleIds.some(rId => roles.find(r => r.id === rId)?.name?.toLowerCase() === 'delivery staff')}
                                     />
                                     <p className="text-xs text-muted-foreground">Required for Delivery Staff to assign routes.</p>
                                 </div>
@@ -313,7 +329,7 @@ export default function AdminsPage() {
                                 {hasPermission('create_admins') && (
                                     <Button 
                                         onClick={() => {
-                                            setFormData({ id: '', username: '', email: '', password: '', name: '', phone: '', roleId: 'super_admin', active: true });
+                                            setFormData({ id: '', username: '', email: '', password: '', name: '', phone: '', roleIds: [], active: true });
                                             setShowCreateDialog(true);
                                         }} 
                                         size="icon" 
@@ -362,11 +378,15 @@ export default function AdminsPage() {
                                             </TableCell>
                                             <TableCell>{admin.email}</TableCell>
                                             <TableCell>
-                                                {admin.roleName ? (
-                                                    <span className="inline-flex items-center text-xs font-semibold bg-green-100 text-green-800 px-2 py-1 rounded-md">
-                                                        <ShieldCheck className="w-3 h-3 mr-1" />
-                                                        {admin.roleName}
-                                                    </span>
+                                                {admin.roles && admin.roles.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {admin.roles.map(role => (
+                                                            <span key={role.id} className="inline-flex items-center text-xs font-semibold bg-green-100 text-green-800 px-2 py-1 rounded-md">
+                                                                <ShieldCheck className="w-3 h-3 mr-1" />
+                                                                {role.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
                                                 ) : (
                                                     <span className="inline-flex items-center text-xs font-semibold bg-yellow-100 text-yellow-800 px-2 py-1 rounded-md">
                                                         <ShieldAlert className="w-3 h-3 mr-1" />
@@ -391,7 +411,7 @@ export default function AdminsPage() {
                                                                     password: '',
                                                                     name: admin.name || '',
                                                                     phone: admin.deliveryBoyPhone || '',
-                                                                    roleId: admin.roleId || 'super_admin',
+                                                                    roleIds: admin.roles ? admin.roles.map(r => r.id) : [],
                                                                     active: admin.active !== false
                                                                 });
                                                                 setShowCreateDialog(true);

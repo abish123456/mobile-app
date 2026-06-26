@@ -208,11 +208,13 @@ const ALL_MENU_ITEMS = [
         title: 'Deposit Report',
         url: '/admin/reports/deposit',
         icon: IndianRupee,
+        permission: 'view_deposit_reports'
       },
       {
         title: 'Product Sales',
         url: '/admin/reports/product-sales',
         icon: Package,
+        permission: 'view_product_sales_reports'
       },
     ]
   },

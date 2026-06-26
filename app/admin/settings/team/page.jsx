@@ -201,6 +201,22 @@ const PERMISSION_GROUPS = [
                 ]
             },
             {
+                name: 'Deposit Report',
+                permissions: [
+                    { id: 'view_deposit_reports', label: 'View Deposit Reports' },
+                    { id: 'export_deposit_reports', label: 'Export Deposit Reports' },
+                    { id: 'view_deposit_reports_count', label: 'View Deposit Reports Count' },
+                ]
+            },
+            {
+                name: 'Product Sales Report',
+                permissions: [
+                    { id: 'view_product_sales_reports', label: 'View Product Sales Reports' },
+                    { id: 'export_product_sales_reports', label: 'Export Product Sales Reports' },
+                    { id: 'view_product_sales_reports_count', label: 'View Product Sales Reports Count' },
+                ]
+            },
+            {
                 name: 'Cash Settlement',
                 permissions: [
                     { id: 'view_cash_settlement_reports', label: 'View Cash Settlement' },

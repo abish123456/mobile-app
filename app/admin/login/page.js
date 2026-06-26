@@ -51,6 +51,8 @@ export default function AdminLoginPage() {
         // Store admin token
         localStorage.setItem('adminToken', data.token);
         localStorage.setItem('adminEmail', formData.email);
+        localStorage.setItem('adminName', data.adminName || 'Admin');
+        localStorage.setItem('adminRoleNames', data.adminRoleNames || 'Super Admin');
         
         if (data.permissions) {
           localStorage.setItem('adminPermissions', JSON.stringify(data.permissions));
