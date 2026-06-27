@@ -60,10 +60,12 @@ export async function POST(req: NextRequest) {
             routeShiftId: string | null;
             shiftStatus: string | null;
             serviceRouteName: string;
+            deliveryBoyName: string;
         }>(
-            `SELECT r."id" as "routeId", rs."id" as "routeShiftId", rs."status" as "shiftStatus", sr."name" as "serviceRouteName"
+            `SELECT r."id" as "routeId", rs."id" as "routeShiftId", rs."status" as "shiftStatus", sr."name" as "serviceRouteName", db."name" as "deliveryBoyName"
              FROM "Route" r
              INNER JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+             INNER JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
              LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
              WHERE r."deliveryBoyId" = $1
                AND (r."date" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = $2::date`,
@@ -172,9 +174,23 @@ export async function POST(req: NextRequest) {
             for (const row of updateRes.rows) {
                 await query(
                     `INSERT INTO "OrderActivityLog" ("id", "orderId", "action", "description", "metadata", "createdAt")
-                     VALUES ($1, $2, 'OUT_FOR_DELIVERY', 'Order is out for delivery. Shift started.', $3, NOW())`,
-                    [crypto.randomUUID(), row.id, JSON.stringify({ routeId, routeShiftId })]
+                     VALUES ($1, $2, 'OUT_FOR_DELIVERY', 'Order is out for delivery. Shift started.', $3, $4)`,
+                    [crypto.randomUUID(), row.id, JSON.stringify({ serviceRoute: targetRoute.serviceRouteName, deliveryBoy: targetRoute.deliveryBoyName }), new Date()]
                 );
+
+                logAction({
+                    actorId: deliveryBoyId,
+                    actorType: 'DELIVERY_BOY',
+                    entity: 'ORDER',
+                    entityId: row.id,
+                    action: 'STATUS_CHANGE',
+                    newData: { 
+                        status: 'OUT_FOR_DELIVERY',
+                        serviceRoute: targetRoute.serviceRouteName,
+                        deliveryBoy: targetRoute.deliveryBoyName 
+                    },
+                    description: `Order status changed to OUT FOR DELIVERY (Shift started)`
+                });
             }
         }
 

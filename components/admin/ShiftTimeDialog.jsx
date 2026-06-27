@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+
 import { adminFetch } from '../../lib/admin-api';
 import toast from 'react-hot-toast';
 import { Clock, Calendar, AlertCircle } from 'lucide-react';
@@ -152,17 +152,7 @@ export default function ShiftTimeDialog({ open, onOpenChange, selectedDate }) {
                     {isLoading ? (
                         <div className="flex justify-center py-8"><span className="text-muted-foreground text-sm">Loading config...</span></div>
                     ) : (
-                        <Tabs defaultValue="override" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 mb-4">
-                                <TabsTrigger value="override" className="gap-2">
-                                    <Calendar className="w-4 h-4" /> Date Override
-                                </TabsTrigger>
-                                <TabsTrigger value="default" className="gap-2">
-                                    <Clock className="w-4 h-4" /> Global Default
-                                </TabsTrigger>
-                            </TabsList>
-                            
-                            <TabsContent value="override" className="space-y-4">
+                        <div className="space-y-4">
                                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-md mb-4">
                                     <p className="text-sm flex items-start gap-2 text-amber-800">
                                         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -213,56 +203,7 @@ export default function ShiftTimeDialog({ open, onOpenChange, selectedDate }) {
                                         {isSaving ? 'Saving...' : 'Save Override'}
                                     </Button>
                                 </div>
-                            </TabsContent>
-
-                            <TabsContent value="default" className="space-y-4">
-                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-md mb-4">
-                                    <p className="text-sm flex items-start gap-2 text-blue-800">
-                                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                                        Changing this affects ALL dates that do not have a specific override set.
-                                    </p>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label>Global Default Start Time</Label>
-                                    <div className="flex items-center gap-2">
-                                        <Select value={hour} onValueChange={setHour}>
-                                            <SelectTrigger className="w-[120px]">
-                                                <SelectValue placeholder="Hour" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {Array.from({ length: 24 }).map((_, i) => (
-                                                    <SelectItem key={i} value={String(i)}>
-                                                        {i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <span>:</span>
-                                        <Select value={minute} onValueChange={setMinute}>
-                                            <SelectTrigger className="w-[100px]">
-                                                <SelectValue placeholder="Minute" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {['0', '15', '30', '45'].map((m) => (
-                                                    <SelectItem key={m} value={m}>
-                                                        {m.padStart(2, '0')}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                        Currently: {config?.defaultHour}:{String(config?.defaultMinute || 0).padStart(2, '0')} (24H)
-                                    </p>
-                                </div>
-                                <div className="flex justify-end pt-4">
-                                    <Button onClick={handleSaveDefault} disabled={isLoading || isSaving}>
-                                        {isSaving ? 'Saving...' : 'Save Global Default'}
-                                    </Button>
-                                </div>
-                            </TabsContent>
-                        </Tabs>
+                            </div>
                     )}
                 </div>
             </DialogContent>
