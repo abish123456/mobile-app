@@ -3,6 +3,8 @@ import { query } from "../../../../lib/db";
 import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse } from "../../../../lib/admin-auth";
 import { formatDateIST, getStartOfDayIST, getEndOfDayIST } from "../../../../lib/timezone";
 
+export const dynamic = 'force-dynamic';
+
 // Helper function to format timestamps for display while preserving original for sorting
 function formatTimestampsForDisplay(order: any) {
   return {
@@ -156,7 +158,8 @@ export async function GET(req: NextRequest) {
         whereConditions.push(`NOT EXISTS (
           SELECT 1 FROM "RouteOrder" ro
           INNER JOIN "Route" r ON ro."routeId" = r."id"
-          WHERE ro."orderId" = o."id" AND r."token" IS NOT NULL
+          LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
+          WHERE ro."orderId" = o."id" AND (r."token" IS NOT NULL OR (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED'))
         )`);
         whereConditions.push(`o."status" NOT IN ('DELIVERED', 'NOT_DELIVERED', 'CANCELLED')`);
       } else if (deliveryStatus === "DELIVERY_IN_PROGRESS") {
@@ -166,7 +169,8 @@ export async function GET(req: NextRequest) {
           EXISTS (
             SELECT 1 FROM "RouteOrder" ro
             INNER JOIN "Route" r ON ro."routeId" = r."id"
-            WHERE ro."orderId" = o."id" AND r."token" IS NOT NULL
+            LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
+            WHERE ro."orderId" = o."id" AND (r."token" IS NOT NULL OR (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED'))
           ) OR o."status" IN ('OUT_FOR_DELIVERY')
         )`);
         whereConditions.push(`o."status" NOT IN ('DELIVERED', 'NOT_DELIVERED', 'CANCELLED')`);
@@ -326,9 +330,10 @@ export async function GET(req: NextRequest) {
            SELECT 1 
            FROM "RouteOrder" ro 
            JOIN "Route" r ON ro."routeId" = r."id"
+           LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
            WHERE ro."orderId" = o."id" 
            AND ro."deliveryStatus" != 'NOT_DELIVERED'
-           AND r."token" IS NOT NULL
+           AND (r."token" IS NOT NULL OR (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED'))
         )) as "isRouteGenerated",
         (
           EXISTS (SELECT 1 FROM "RouteOrder" ro_check WHERE ro_check."orderId" = o."id" AND ro_check."deliveryStatus" = 'NOT_DELIVERED')

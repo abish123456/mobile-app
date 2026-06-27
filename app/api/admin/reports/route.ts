@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
           commonWhereConditions.push(`r."token" IS NULL`);
           commonWhereConditions.push(`${effectiveStatusSql} NOT IN ('DELIVERED', 'NOT_DELIVERED')`);
         } else if (deliveryStatus === 'DELIVERY_IN_PROGRESS') {
-          commonWhereConditions.push(`r."token" IS NOT NULL`);
+          commonWhereConditions.push(`(r."token" IS NOT NULL OR (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED'))`);
           commonWhereConditions.push(`${effectiveStatusSql} NOT IN ('DELIVERED', 'NOT_DELIVERED')`);
         } else if (deliveryStatus === 'PENDING') {
           commonWhereConditions.push(`(${effectiveStatusSql} = 'PENDING' OR ${effectiveStatusSql} IS NULL)`);
@@ -166,6 +166,7 @@ export async function GET(req: NextRequest) {
           LIMIT 1
         ) day_ro ON true
         LEFT JOIN "Route" r ON day_ro."routeId" = r."id"
+        LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
         LEFT JOIN "Address" a ON o."addressId" = a."id"
         LEFT JOIN "ServiceArea" sa ON a."pincode" = sa."pincode"
         ${commonWhereClause}
@@ -206,6 +207,7 @@ export async function GET(req: NextRequest) {
           LIMIT 1
         ) day_ro ON true
         LEFT JOIN "Route" r ON day_ro."routeId" = r."id"
+        LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
         LEFT JOIN "Address" a ON o."addressId" = a."id"
         LEFT JOIN "ServiceArea" sa ON a."pincode" = sa."pincode"
         ${commonWhereClause}
@@ -296,11 +298,12 @@ export async function GET(req: NextRequest) {
               ro."updatedAt" as "deliveredDate",
               ro."routeId",
               (ro."id" IS NOT NULL) as "isAssigned",
-              (r_inner."token" IS NOT NULL) as "isRouteGenerated",
+              (r_inner."token" IS NOT NULL OR (rs_inner."status" IS NOT NULL AND rs_inner."status" != 'NOT_STARTED')) as "isRouteGenerated",
               COALESCE(sr_inner."name", sr_area_inner."name") as "routeName",
               db_inner."name" as "deliveryBoyName"
             FROM "RouteOrder" ro
             LEFT JOIN "Route" r_inner ON ro."routeId" = r_inner."id"
+            LEFT JOIN "RouteShift" rs_inner ON rs_inner."routeId" = r_inner."id"
             LEFT JOIN "ServiceRoute" sr_inner ON r_inner."serviceRouteId" = sr_inner."id"
             LEFT JOIN "DeliveryBoy" db_inner ON r_inner."deliveryBoyId" = db_inner."id"
             LEFT JOIN "Address" a_inner ON a_inner."id" = o."addressId"
@@ -314,6 +317,7 @@ export async function GET(req: NextRequest) {
             LIMIT 1
           ) day_ro ON true
           LEFT JOIN "Route" r ON day_ro."routeId" = r."id"
+          LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
           INNER JOIN "Customer" c ON o."customerId" = c."id"
           LEFT JOIN "Address" a ON o."addressId" = a."id"
           LEFT JOIN "ServiceArea" sa ON a."pincode" = sa."pincode"
@@ -376,11 +380,12 @@ export async function GET(req: NextRequest) {
               ro."updatedAt" as "deliveredDate",
               ro."routeId",
               (ro."id" IS NOT NULL) as "isAssigned",
-              (r_inner."token" IS NOT NULL) as "isRouteGenerated",
+              (r_inner."token" IS NOT NULL OR (rs_inner."status" IS NOT NULL AND rs_inner."status" != 'NOT_STARTED')) as "isRouteGenerated",
               COALESCE(sr_inner."name", sr_area_inner."name") as "routeName",
               db_inner."name" as "deliveryBoyName"
             FROM "RouteOrder" ro
             LEFT JOIN "Route" r_inner ON ro."routeId" = r_inner."id"
+            LEFT JOIN "RouteShift" rs_inner ON rs_inner."routeId" = r_inner."id"
             LEFT JOIN "ServiceRoute" sr_inner ON r_inner."serviceRouteId" = sr_inner."id"
             LEFT JOIN "DeliveryBoy" db_inner ON r_inner."deliveryBoyId" = db_inner."id"
             LEFT JOIN "Address" a_inner ON a_inner."id" = o."addressId"
@@ -393,6 +398,7 @@ export async function GET(req: NextRequest) {
             LIMIT 1
           ) day_ro ON true
           LEFT JOIN "Route" r ON day_ro."routeId" = r."id"
+          LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
           INNER JOIN "Customer" c ON o."customerId" = c."id"
           LEFT JOIN "Address" a ON o."addressId" = a."id"
           WHERE o."createdAt" >= $1 AND o."createdAt" <= $2

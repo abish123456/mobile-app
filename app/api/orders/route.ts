@@ -144,9 +144,10 @@ export async function GET(req: NextRequest) {
            SELECT 1 
            FROM "RouteOrder" ro 
            JOIN "Route" r ON ro."routeId" = r."id"
+           LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
            WHERE ro."orderId" = o."id" 
            AND ro."deliveryStatus" != 'NOT_DELIVERED'
-           AND r."token" IS NOT NULL
+           AND (r."token" IS NOT NULL OR (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED'))
         )) as "isRouteGenerated"
        FROM "Order" o
        INNER JOIN "Address" a ON o."addressId" = a."id"

@@ -4,6 +4,8 @@ import crypto from "crypto";
 import { verifyAdminAuthWithPermission, getAdminPermissionErrorResponse } from "../../../../lib/admin-auth";
 import { getStartOfDayIST, getEndOfDayIST } from "../../../../lib/timezone";
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/admin/routes - List all daily routes (Updated for ServiceRoute schema)
 export async function GET(req: NextRequest) {
   try {

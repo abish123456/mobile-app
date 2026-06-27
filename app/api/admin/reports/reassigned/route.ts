@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         o."deliveryDate",
         o."paymentStatus",
         (EXISTS (SELECT 1 FROM "RouteOrder" ro_check WHERE ro_check."orderId" = o."id" AND ro_check."deliveryStatus" != 'NOT_DELIVERED')) as "isAssigned",
-        (EXISTS (SELECT 1 FROM "RouteOrder" ro_prog JOIN "Route" r_prog ON ro_prog."routeId" = r_prog."id" WHERE ro_prog."orderId" = o."id" AND r_prog."token" IS NOT NULL AND ro_prog."deliveryStatus" != 'NOT_DELIVERED')) as "isRouteGenerated",
+        (EXISTS (SELECT 1 FROM "RouteOrder" ro_prog JOIN "Route" r_prog ON ro_prog."routeId" = r_prog."id" LEFT JOIN "RouteShift" rs_prog ON rs_prog."routeId" = r_prog."id" WHERE ro_prog."orderId" = o."id" AND (r_prog."token" IS NOT NULL OR (rs_prog."status" IS NOT NULL AND rs_prog."status" != 'NOT_STARTED')) AND ro_prog."deliveryStatus" != 'NOT_DELIVERED')) as "isRouteGenerated",
         (SELECT "deliveryStatus" FROM "RouteOrder" ro WHERE ro."orderId" = o."id" AND ro."deliveryStatus" != 'NOT_DELIVERED' LIMIT 1) as "deliveryStatus",
         (SELECT "updatedAt" FROM "RouteOrder" ro WHERE ro."orderId" = o."id" AND ro."deliveryStatus" = 'DELIVERED' LIMIT 1) as "deliveredDate",
         c."name" as "customerName",

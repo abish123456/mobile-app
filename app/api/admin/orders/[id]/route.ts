@@ -325,6 +325,7 @@ export async function PATCH(
       deliveryDate: Date;
       pincode: string;
       routeToken: string | null;
+      shiftStatus: string | null;
     }>(
       `SELECT 
         o."status", 
@@ -334,11 +335,13 @@ export async function PATCH(
         o."addressId", 
         o."deliveryDate", 
         a."pincode", 
-        r."token" as "routeToken" 
+        r."token" as "routeToken",
+        rs."status" as "shiftStatus"
        FROM "Order" o 
        INNER JOIN "Address" a ON o."addressId" = a."id"
        LEFT JOIN "RouteOrder" ro ON o."id" = ro."orderId" AND ro."deliveryStatus" = 'PENDING'
        LEFT JOIN "Route" r ON ro."routeId" = r."id"
+       LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
        WHERE o."id" = $1`,
       [orderId]
     );
@@ -350,7 +353,7 @@ export async function PATCH(
       );
     }
 
-    const { status: currentStatus, paymentStatus, depositAmount, customerId, addressId, deliveryDate, pincode: oldPincode, routeToken } = orderCheck.rows[0];
+    const { status: currentStatus, paymentStatus, depositAmount, customerId, addressId, deliveryDate, pincode: oldPincode, routeToken, shiftStatus } = orderCheck.rows[0];
 
     if (currentStatus === 'DELIVERED' || currentStatus === 'CANCELLED') {
       return NextResponse.json(
@@ -359,9 +362,9 @@ export async function PATCH(
       );
     }
 
-    if (action === 'UPDATE_ADDRESS' && routeToken) {
+    if (action === 'UPDATE_ADDRESS' && (routeToken || (shiftStatus && shiftStatus !== 'NOT_STARTED'))) {
       return NextResponse.json(
-        { success: false, message: "Cannot update address after route link is generated" },
+        { success: false, message: "Cannot update address after route link is generated or shift has started" },
         { status: 400 }
       );
     }

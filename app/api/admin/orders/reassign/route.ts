@@ -86,6 +86,26 @@ export async function POST(req: NextRequest) {
         const startOfDay = getStartOfDayIST(effectiveDate);
         const endOfDay = getEndOfDayIST(effectiveDate);
 
+        // Check if currently assigned route is locked
+        const currentRouteCheckRes = await query<{ token: string | null; shiftStatus: string | null }>(
+            `SELECT r."token", rs."status" as "shiftStatus"
+             FROM "RouteOrder" ro
+             JOIN "Route" r ON ro."routeId" = r."id"
+             LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
+             WHERE ro."orderId" = $1 AND ro."deliveryStatus" = 'PENDING'
+             LIMIT 1`,
+            [orderId]
+        );
+        if (currentRouteCheckRes.rowCount > 0) {
+            const currentRoute = currentRouteCheckRes.rows[0];
+            if (currentRoute.token || (currentRoute.shiftStatus && currentRoute.shiftStatus !== 'NOT_STARTED')) {
+                return NextResponse.json(
+                    { success: false, message: "Cannot reassign - the current route's delivery link is already generated or its shift has started." },
+                    { status: 400 }
+                );
+            }
+        }
+
         // 3. New Check: Block reassignment if target route for "Today" is already "Live"
         // This mirrors the logic in the Reschedule API
         if (effectiveDate.getTime() === today.getTime()) {
@@ -93,11 +113,15 @@ export async function POST(req: NextRequest) {
                 `SELECT r."id"
                  FROM "Route" r
                  JOIN "ServiceArea" sa ON sa."serviceRouteId" = r."serviceRouteId"
+                 LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
                  WHERE sa."pincode" = $1 
                    AND r."date" >= $2
                    AND r."date" < $3
-                   AND r."token" IS NOT NULL
-                   AND (r."tokenExpiresAt" IS NULL OR r."tokenExpiresAt" > NOW())
+                   AND (
+                       (r."token" IS NOT NULL AND (r."tokenExpiresAt" IS NULL OR r."tokenExpiresAt" > NOW()))
+                       OR
+                       (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED')
+                   )
                  LIMIT 1`,
                 [order.pincode, startOfDay, endOfDay]
             );
@@ -106,7 +130,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json(
                     { 
                         success: false, 
-                        message: "Cannot reassign to Today - the delivery link for this route is already live (generated and not expired)." 
+                        message: "Cannot reassign to Today - the delivery link for this route is already live or the shift has started." 
                     },
                     { status: 400 }
                 );

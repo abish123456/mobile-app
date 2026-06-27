@@ -104,8 +104,9 @@ export async function POST(req: NextRequest) {
             `SELECT r."token" 
              FROM "Route" r
              JOIN "RouteOrder" ro ON ro."routeId" = r."id"
+             LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
              WHERE ro."orderId" = $1 
-               AND r."token" IS NOT NULL
+               AND (r."token" IS NOT NULL OR (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED'))
                AND r."date" >= $2
                AND r."date" < $3
                AND ro."deliveryStatus" = 'PENDING'
@@ -136,10 +137,11 @@ export async function POST(req: NextRequest) {
             `SELECT r."id"
              FROM "Route" r
              JOIN "ServiceArea" sa ON sa."serviceRouteId" = r."serviceRouteId"
+             LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
              WHERE sa."pincode" = $1 
                AND r."date" >= $2
                AND r."date" < $3
-               AND r."token" IS NOT NULL
+               AND (r."token" IS NOT NULL OR (rs."status" IS NOT NULL AND rs."status" != 'NOT_STARTED'))
              LIMIT 1`,
             [order.pincode, selectedDateStart, selectedDateEnd]
         );
@@ -148,7 +150,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: `Cannot reschedule to ${selectedDateStart.toLocaleDateString('en-IN')} - the delivery link for this route is already generated.`
+                    message: `Cannot reschedule to ${selectedDateStart.toLocaleDateString('en-IN')} - the delivery link for this route is already generated or the shift has already started.`
                 },
                 { status: 400 }
             );
