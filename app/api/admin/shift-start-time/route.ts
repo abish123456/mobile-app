@@ -38,13 +38,23 @@ export async function GET(req: NextRequest) {
 }
 
 /**
+ * Helper function to check if any shifts have already started on a given date string (YYYY-MM-DD)
+ */
+async function hasShiftsStartedOnDate(dateStr: string): Promise<boolean> {
+    const checkRes = await query(
+        `SELECT 1 FROM "Route" r
+         JOIN "RouteShift" rs ON rs."routeId" = r."id"
+         WHERE DATE(r."date" AT TIME ZONE 'Asia/Kolkata') = $1
+         AND rs."status" != 'NOT_STARTED'
+         LIMIT 1`,
+        [dateStr]
+    );
+    return checkRes.rows.length > 0;
+}
+
+/**
  * POST /api/admin/shift-start-time
  * Update the global default shift start time, or set a one-day override.
- *
- * Body:
- * { type: "default", hour: 8, minute: 0 }                          → sets global default
- * { type: "override", date: "2026-06-27", hour: 9, minute: 30 }   → sets one-day override
- * { type: "clear_override" }                                       → removes the override
  */
 export async function POST(req: NextRequest) {
     try {
@@ -85,6 +95,15 @@ export async function POST(req: NextRequest) {
             if (!date || hour === undefined || hour < 0 || hour > 23) {
                 return NextResponse.json({ success: false, message: "date and valid hour required for override." }, { status: 400 });
             }
+            
+            // Validation: Cannot override if shifts have already started
+            if (await hasShiftsStartedOnDate(date)) {
+                return NextResponse.json({ 
+                    success: false, 
+                    message: `Cannot change shift time for ${date} because one or more staff members have already started their shift.` 
+                }, { status: 400 });
+            }
+
             const min = minute ?? 0;
             await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_DATE'`, [date]);
             await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_HOUR'`, [String(hour)]);
@@ -102,6 +121,18 @@ export async function POST(req: NextRequest) {
         }
 
         if (type === "clear_override") {
+            // Check current override date to see if shifts have already started
+            const currentOverrideRes = await query<{ value: string }>(`SELECT value FROM "SystemConfig" WHERE key = 'SHIFT_START_OVERRIDE_DATE'`);
+            if (currentOverrideRes.rows.length > 0 && currentOverrideRes.rows[0].value) {
+                const currentDate = currentOverrideRes.rows[0].value;
+                if (await hasShiftsStartedOnDate(currentDate)) {
+                    return NextResponse.json({ 
+                        success: false, 
+                        message: `Cannot clear shift time override for ${currentDate} because one or more staff members have already started their shift.` 
+                    }, { status: 400 });
+                }
+            }
+
             await query(`UPDATE "SystemConfig" SET "value" = '', "updatedAt" = NOW() WHERE "key" IN ('SHIFT_START_OVERRIDE_DATE','SHIFT_START_OVERRIDE_HOUR','SHIFT_START_OVERRIDE_MINUTE')`);
             logAction({
                 actorId: adminId,

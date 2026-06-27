@@ -665,9 +665,14 @@ export default function RoutesPage() {
   const handleOptimizePath = async () => {
     if (!ordersDialogRoute?.routeId || isOptimizing) return;
 
+    const isPaused = ordersDialogRoute?.shiftStatus === 'PAUSED';
+    const endpoint = isPaused 
+      ? `/api/admin/routes/${ordersDialogRoute.routeId}/re-optimize`
+      : `/api/admin/routes/${ordersDialogRoute.routeId}/optimize`;
+
     setIsOptimizing(true);
     try {
-      const response = await adminFetch(`/api/admin/routes/${ordersDialogRoute.routeId}/optimize`, {
+      const response = await adminFetch(endpoint, {
         method: 'POST'
       });
       const data = await response.json();
@@ -1413,17 +1418,19 @@ export default function RoutesPage() {
             </div>
             <div className="flex items-center gap-3">
               {(() => {
-                const isLocked = !!ordersDialogRoute?.shiftStatus && ordersDialogRoute.shiftStatus !== 'NOT_STARTED';
+                const canOptimize = !ordersDialogRoute?.shiftStatus || ordersDialogRoute.shiftStatus === 'NOT_STARTED' || ordersDialogRoute.shiftStatus === 'PAUSED';
+                const isReoptimizing = ordersDialogRoute?.shiftStatus === 'PAUSED' || (selectedRouteOrders.some(o => o.sequence === 0) && selectedRouteOrders.some(o => o.sequence > 0));
+                
                 return (
                   <>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleOptimizePath}
-                disabled={isOptimizing || !ordersDialogRoute?.routeId || isLocked || selectedRouteOrders.some(o => !o.address.latitude || !o.address.longitude)}
+                disabled={isOptimizing || !ordersDialogRoute?.routeId || !canOptimize || selectedRouteOrders.some(o => !o.address.latitude || !o.address.longitude)}
                 className={cn(
                   "transition-all duration-300",
-                  selectedRouteOrders.some(o => o.sequence === 0) && selectedRouteOrders.some(o => o.sequence > 0)
+                  isReoptimizing
                     ? "bg-amber-600 text-white border-amber-600 hover:bg-amber-700 hover:border-amber-700 shadow-md ring-2 ring-amber-200"
                     : "text-blue-600 border-blue-200 hover:bg-blue-50",
                   selectedRouteOrders.some(o => !o.address.latitude || !o.address.longitude) && "opacity-50 cursor-not-allowed border-red-200 text-red-400"
@@ -1432,12 +1439,12 @@ export default function RoutesPage() {
               >
                 {isOptimizing ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : selectedRouteOrders.some(o => o.sequence === 0) && selectedRouteOrders.some(o => o.sequence > 0) ? (
+                ) : isReoptimizing ? (
                   <RefreshCcw className="h-4 w-4 mr-2" />
                 ) : (
                   <Shuffle className="h-4 w-4 mr-2" />
                 )}
-                {selectedRouteOrders.some(o => o.sequence === 0) && selectedRouteOrders.some(o => o.sequence > 0) ? "Re-Optimise Path" : "Auto-Optimise Path"}
+                {isReoptimizing ? "Re-Optimise Path" : "Auto-Optimise Path"}
               </Button>
               <Button
                 variant="outline"

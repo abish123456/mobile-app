@@ -30,6 +30,8 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    SelectGroup,
+    SelectLabel
 } from '../../../components/ui/select';
 
 const CATEGORIES = {
@@ -592,13 +594,24 @@ export default function AuditLogsPage() {
 
     const fetchAdmins = async () => {
         try {
-            const res = await adminFetch('/api/admin/admins');
-            const data = await res.json();
-            if (data.success) {
-                setAdmins(data.admins || []);
+            const [adminsRes, staffRes] = await Promise.all([
+                adminFetch('/api/admin/admins'),
+                adminFetch('/api/admin/delivery-boys')
+            ]);
+            
+            const adminsData = await adminsRes.json();
+            const staffData = await staffRes.json();
+            
+            let combined = [];
+            if (adminsData.success && adminsData.admins) {
+                combined = [...combined, ...adminsData.admins.map(a => ({ ...a, _type: 'ADMIN' }))];
             }
+            if (staffData.success && staffData.deliveryBoys) {
+                combined = [...combined, ...staffData.deliveryBoys.map(s => ({ ...s, username: s.phone, _type: 'STAFF' }))];
+            }
+            setAdmins(combined);
         } catch (err) {
-            console.error('Failed to fetch admins list for filtering:', err);
+            console.error('Failed to fetch actors list for filtering:', err);
         }
     };
 
@@ -918,18 +931,31 @@ export default function AuditLogsPage() {
                                             <span className="font-semibold text-gray-700 shrink-0">Admin</span>
                                             <span className="text-gray-600 truncate">
                                                 {selectedAdminFilter === 'all'
-                                                    ? 'All Admins'
-                                                    : (admins.find(a => a.id === selectedAdminFilter)?.name || admins.find(a => a.id === selectedAdminFilter)?.username || 'All Admins')}
+                                                    ? 'All Actors'
+                                                    : (admins.find(a => a.id === selectedAdminFilter)?.name || admins.find(a => a.id === selectedAdminFilter)?.username || 'All Actors')}
                                             </span>
                                         </div>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Admins</SelectItem>
-                                        {admins.map((adm) => (
-                                            <SelectItem key={adm.id} value={adm.id}>
-                                                {adm.name || adm.username}
-                                            </SelectItem>
-                                        ))}
+                                        <SelectItem value="all">All Actors</SelectItem>
+                                        
+                                        <SelectGroup>
+                                            <SelectLabel>Admins</SelectLabel>
+                                            {admins.filter(a => a._type === 'ADMIN').map((admin) => (
+                                                <SelectItem key={admin.id} value={admin.id}>
+                                                    {admin.name || admin.username}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
+                                        
+                                        <SelectGroup>
+                                            <SelectLabel>Delivery Staff</SelectLabel>
+                                            {admins.filter(a => a._type === 'STAFF').map((staff) => (
+                                                <SelectItem key={staff.id} value={staff.id}>
+                                                    {staff.name || staff.username}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
                                     </SelectContent>
                                 </Select>
 
@@ -955,7 +981,7 @@ export default function AuditLogsPage() {
                                             <TableHeader className="sticky top-0 bg-white z-10 shadow-[0_1px_2px_-1px_rgba(0,0,0,0.1)]">
                                                 <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
                                                     <TableHead className="w-[15%] font-bold text-xs text-gray-500 tracking-wider text-center">DATE & TIME</TableHead>
-                                                    <TableHead className="w-[15%] font-bold text-xs text-gray-500 tracking-wider text-center">ADMIN</TableHead>
+                                                    <TableHead className="w-[15%] font-bold text-xs text-gray-500 tracking-wider text-center">ACTOR</TableHead>
                                                     <TableHead className="w-[15%] font-bold text-xs text-gray-500 tracking-wider text-center">RESOURCE</TableHead>
                                                     <TableHead className="w-[15%] font-bold text-xs text-gray-500 tracking-wider text-center">ACTION</TableHead>
                                                     <TableHead className="w-[35%] font-bold text-xs text-gray-500 tracking-wider text-left">DESCRIPTION</TableHead>
