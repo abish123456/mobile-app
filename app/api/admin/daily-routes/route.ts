@@ -72,12 +72,17 @@ export async function POST(req: NextRequest) {
             routeId = route.id;
 
             if (deliveryBoyId) {
-                // If token exists, do NOT allow changing deliveryBoyId
-                if (route.token && route.deliveryBoyId !== deliveryBoyId) {
+                // Check RouteShift: if shift has started, block staff reassignment
+                const shiftRes = await query<{ status: string }>(
+                    `SELECT rs."status" FROM "RouteShift" rs WHERE rs."routeId" = $1`,
+                    [routeId]
+                );
+                const shiftStatus = shiftRes.rows[0]?.status;
+                if (shiftStatus && shiftStatus !== 'NOT_STARTED') {
                     return NextResponse.json(
                         {
                             success: false,
-                            message: "Cannot change delivery staff after magic link is generated."
+                            message: `Cannot change delivery staff after the shift has already started (current status: ${shiftStatus}).`
                         },
                         { status: 400 }
                     );
@@ -151,6 +156,14 @@ export async function POST(req: NextRequest) {
                 `INSERT INTO "Route" ("id", "date", "serviceRouteId", "deliveryBoyId", "token", "tokenExpiresAt", "createdAt", "updatedAt")
          VALUES ($1, $2, $3, $4, NULL, NULL, NOW(), NOW())`,
                 [routeId, routeDate, serviceRouteId, deliveryBoyId]
+            );
+
+            // Auto-create RouteShift so the admin UI shows "Not Started" immediately
+            const routeShiftId = crypto.randomUUID();
+            await query(
+                `INSERT INTO "RouteShift" ("id", "routeId", "status", "createdAt", "updatedAt")
+                 VALUES ($1, $2, 'NOT_STARTED', NOW(), NOW())`,
+                [routeShiftId, routeId]
             );
 
             await logAction({

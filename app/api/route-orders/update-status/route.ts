@@ -43,25 +43,30 @@ export async function POST(req: NextRequest) {
     // Get route order, order details, and route expiration
     const routeOrderRes = await query<{
       orderId: string;
+      routeId: string;
       customerId: string;
       paymentStatus: string;
       orderStatus: string;
       tokenExpiresAt: Date;
       isSubmitted: boolean;
+      shiftStatus: string | null;
     }>(
       `SELECT 
-         o."id" as "orderId", 
+         o."id" as "orderId",
+         ro."routeId",
          o."customerId",
          o."paymentStatus", 
          o."status" as "orderStatus", 
          r."tokenExpiresAt",
          r."isSubmitted",
          db."id" as "deliveryBoyId",
-         db."name" as "deliveryBoyName"
+         db."name" as "deliveryBoyName",
+         rs."status" as "shiftStatus"
        FROM "RouteOrder" ro
        INNER JOIN "Order" o ON ro."orderId" = o."id"
        INNER JOIN "Route" r ON ro."routeId" = r."id"
        LEFT JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
+       LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
        WHERE ro."id" = $1`,
       [routeOrderId]
     );
@@ -73,13 +78,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { orderId, customerId, paymentStatus, orderStatus, tokenExpiresAt, isSubmitted, deliveryBoyId, deliveryBoyName } = routeOrderRes.rows[0];
+    const { orderId, routeId, customerId, paymentStatus, orderStatus, tokenExpiresAt, isSubmitted, deliveryBoyId, deliveryBoyName, shiftStatus } = routeOrderRes.rows[0];
     const now = new Date();
 
-    // Check if route is already submitted
+    // Check if route is already submitted (legacy lock)
     if (isSubmitted) {
       return NextResponse.json(
         { success: false, message: "Route has already been submitted and is locked. You cannot modify delivery status." },
+        { status: 403 }
+      );
+    }
+
+    // Shift gate: block updates when shift is paused, not started, or ended
+    // Only applies to new routes that HAVE a RouteShift record (legacy routes pass through)
+    if (shiftStatus && shiftStatus !== 'ACTIVE') {
+      const messages: Record<string, string> = {
+        NOT_STARTED: "Shift has not started yet. Start your shift to update orders.",
+        PAUSED: "Shift is currently paused. Resume your shift to update orders.",
+        ENDED: "Shift has ended. You cannot update orders after the shift ends.",
+      };
+      return NextResponse.json(
+        { success: false, message: messages[shiftStatus] || "Shift is not active.", shiftStatus },
         { status: 403 }
       );
     }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
 import { getStartOfDayIST, formatDateToISO } from "../../../../../lib/timezone";
-import jwt from "jsonwebtoken";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_development_only";
 
@@ -44,6 +45,11 @@ export async function GET(req: NextRequest) {
       deliveryBoyPhone: string;
       isSubmitted: boolean;
       submittedAt: Date | null;
+      routeShiftId: string | null;
+      shiftStatus: string | null;
+      shiftStartedAt: Date | null;
+      shiftPausedAt: Date | null;
+      shiftEndedAt: Date | null;
     }>(
       `SELECT 
         r."id",
@@ -54,10 +60,16 @@ export async function GET(req: NextRequest) {
         db."name" as "deliveryBoyName",
         db."phone" as "deliveryBoyPhone",
         r."isSubmitted",
-        r."submittedAt"
+        r."submittedAt",
+        rs."id" as "routeShiftId",
+        rs."status" as "shiftStatus",
+        rs."startedAt" as "shiftStartedAt",
+        rs."pausedAt" as "shiftPausedAt",
+        rs."endedAt" as "shiftEndedAt"
        FROM "Route" r
        INNER JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
        INNER JOIN "DeliveryBoy" db ON r."deliveryBoyId" = db."id"
+       LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
        WHERE r."deliveryBoyId" = $1 AND r."date" >= $2 AND r."date" < $3`,
       [deliveryBoyId, todayIST, tomorrowIST]
     );
@@ -405,6 +417,27 @@ export async function GET(req: NextRequest) {
 
     const allReturnRequests = [...returnRequests, ...depositRefundRequestsFormatted];
 
+    // Fetch shift start time config to tell the app when the shift opens
+    const shiftCfgRes = await query<{ key: string; value: string }>(
+      `SELECT "key", "value" FROM "SystemConfig"
+       WHERE "key" IN ('SHIFT_START_HOUR','SHIFT_START_MINUTE','SHIFT_START_OVERRIDE_DATE','SHIFT_START_OVERRIDE_HOUR','SHIFT_START_OVERRIDE_MINUTE')`
+    );
+    const cfg: Record<string, string> = {};
+    shiftCfgRes.rows.forEach(r => { cfg[r.key] = r.value; });
+    const todayStr = formatDateToISO(todayIST);
+    let shiftHour = parseInt(cfg['SHIFT_START_HOUR'] || '8');
+    let shiftMinute = parseInt(cfg['SHIFT_START_MINUTE'] || '0');
+    if (cfg['SHIFT_START_OVERRIDE_DATE'] === todayStr && cfg['SHIFT_START_OVERRIDE_HOUR'] !== '') {
+      shiftHour = parseInt(cfg['SHIFT_START_OVERRIDE_HOUR']);
+      shiftMinute = parseInt(cfg['SHIFT_START_OVERRIDE_MINUTE'] || '0');
+    }
+    const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const canStartNow = nowIST.getHours() > shiftHour ||
+      (nowIST.getHours() === shiftHour && nowIST.getMinutes() >= shiftMinute);
+    const period = shiftHour >= 12 ? 'PM' : 'AM';
+    const displayHour = shiftHour % 12 || 12;
+    const shiftStartTime = `${String(displayHour).padStart(2,'0')}:${String(shiftMinute).padStart(2,'0')} ${period}`;
+
     return NextResponse.json({
       success: true,
       route: {
@@ -427,6 +460,16 @@ export async function GET(req: NextRequest) {
         },
         isSubmitted: routeInfo.isSubmitted || false,
         submittedAt: routeInfo.submittedAt,
+        // Shift lifecycle — null for legacy routes (no RouteShift record)
+        shift: routeInfo.routeShiftId ? {
+          id: routeInfo.routeShiftId,
+          status: routeInfo.shiftStatus,       // NOT_STARTED | ACTIVE | PAUSED | ENDED
+          startedAt: routeInfo.shiftStartedAt,
+          pausedAt: routeInfo.shiftPausedAt,
+          endedAt: routeInfo.shiftEndedAt,
+          shiftStartTime,                       // e.g. "08:00 AM"
+          canStartNow,                          // true if current IST time >= shift open time
+        } : null,
         notDeliveredReasons: (await query(`SELECT reason FROM "NotDeliveredReason" WHERE "isActive" = true ORDER BY "reason" ASC`)).rows.map(r => r.reason)
       },
     });

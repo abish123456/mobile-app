@@ -258,21 +258,22 @@ model ServiceRoute {
 }
 
 model Route {
-  id             String          @id @default(cuid())
-  date           DateTime
-  token          String?         @unique
-  tokenExpiresAt DateTime?
-  deliveryBoyId  String
-  isSubmitted    Boolean         @default(false)
-  submittedAt    DateTime?
-  isAutoOptimized Boolean        @default(false)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  serviceRouteId String
-  deliveryBoy    DeliveryBoy     @relation(fields: [deliveryBoyId], references: [id])
-  serviceRoute   ServiceRoute    @relation(fields: [serviceRouteId], references: [id])
-  routeOrders    RouteOrder[]
-  tokenLogs      RouteTokenLog[]
+  id              String          @id @default(cuid())
+  date            DateTime
+  token           String?         @unique
+  tokenExpiresAt  DateTime?
+  deliveryBoyId   String
+  isSubmitted     Boolean         @default(false)
+  submittedAt     DateTime?
+  isAutoOptimized Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  serviceRouteId  String
+  deliveryBoy     DeliveryBoy     @relation(fields: [deliveryBoyId], references: [id])
+  serviceRoute    ServiceRoute    @relation(fields: [serviceRouteId], references: [id])
+  routeOrders     RouteOrder[]
+  tokenLogs       RouteTokenLog[]
+  routeShift      RouteShift?     // optional: null for legacy routes
 
   @@index([date])
   @@index([deliveryBoyId])
@@ -290,6 +291,37 @@ model RouteTokenLog {
   route       Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
   @@index([routeId])
+}
+
+model RouteShift {
+  id         String      @id @default(cuid())
+  routeId    String      @unique
+  status     ShiftStatus @default(NOT_STARTED)
+  startedAt  DateTime?
+  pausedAt   DateTime?
+  resumedAt  DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  route      Route       @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  shiftLogs  ShiftLog[]
+
+  @@index([status])
+  @@index([routeId])
+}
+
+model ShiftLog {
+  id           String     @id @default(cuid())
+  routeShiftId String
+  action       String     // START_SHIFT | PAUSE_SHIFT | RESUME_SHIFT | END_SHIFT | FORCE_ENDED | RE_OPTIMISED
+  actorId      String?    // deliveryBoyId or adminId
+  actorType    String     // DELIVERY_BOY | ADMIN | SYSTEM
+  metadata     Json?
+  createdAt    DateTime   @default(now())
+  routeShift   RouteShift @relation(fields: [routeShiftId], references: [id], onDelete: Cascade)
+
+  @@index([routeShiftId])
+  @@index([createdAt])
 }
 
 model RouteOrder {
@@ -505,6 +537,13 @@ enum DeliveryStatus {
   PENDING
   DELIVERED
   NOT_DELIVERED
+}
+
+enum ShiftStatus {
+  NOT_STARTED
+  ACTIVE
+  PAUSED
+  ENDED
 }
 
 model NotDeliveredReason {

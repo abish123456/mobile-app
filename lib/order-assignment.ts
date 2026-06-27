@@ -143,6 +143,13 @@ export async function assignOrderToRoute(orderId: string): Promise<AssignmentRes
               VALUES ($1, $2, $3, $4, NULL, NULL, NOW(), NOW())`,
             [routeId, startOfDay, serviceRouteId, currentDeliveryBoyId]
           );
+
+          // Auto-create RouteShift for this carry-forward route
+          await client.query(
+            `INSERT INTO "RouteShift" ("id", "routeId", "status", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid(), $1, 'NOT_STARTED', NOW(), NOW())`,
+            [routeId]
+          );
         } else {
           console.log(`[ASSIGN] No staff assigned to carry forward`);
           return { success: false, reason: "no_daily_route_assigned" };
@@ -294,11 +301,18 @@ export async function reassignOrdersByPincodeBulk(pincodes: string[]): Promise<{
 
   for (const order of pendingOrdersRes.rows) {
     try {
-      // 2. Safety Check: If already linked to a route that HAS a token, skip it.
-      if (order.token) {
-        console.log(`[REASSIGN] Skipping order ${order.id} - route already has token.`);
-        totalSkipped++;
-        continue;
+      // 2. Safety Check: If route has an active/paused/ended shift, skip reassignment.
+      if (order.routeId) {
+        const shiftRes = await query<{ status: string }>(
+          `SELECT rs."status" FROM "RouteShift" rs WHERE rs."routeId" = $1`,
+          [order.routeId]
+        );
+        const shiftStatus = shiftRes.rows[0]?.status;
+        if (shiftStatus && shiftStatus !== 'NOT_STARTED') {
+          console.log(`[REASSIGN] Skipping order ${order.id} - RouteShift status is ${shiftStatus}.`);
+          totalSkipped++;
+          continue;
+        }
       }
 
       // 3. Use transaction to unassign and reassign
