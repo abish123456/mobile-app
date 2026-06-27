@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
         ${dateFilter}
         GROUP BY r."id", r."date", r."serviceRouteId", sr."name", r."token", r."tokenExpiresAt", r."deliveryBoyId", db."name", r."createdAt", rr."refundCount", r."isSubmitted", r."submittedAt", r."isAutoOptimized", rs."id", rs."status"
-        HAVING COUNT(CASE WHEN o."id" IS NOT NULL AND NOT (o."paymentMethod" = 'ONLINE' AND o."paymentStatus" = 'PENDING') THEN 1 END) > 0 OR COALESCE(rr."refundCount", 0) > 0 OR r."token" IS NOT NULL
+        HAVING COUNT(CASE WHEN o."id" IS NOT NULL AND NOT (o."paymentMethod" = 'ONLINE' AND o."paymentStatus" = 'PENDING') THEN 1 END) > 0 OR COALESCE(rr."refundCount", 0) > 0 OR r."token" IS NOT NULL OR rs."id" IS NOT NULL
         ORDER BY r."date" DESC, r."createdAt" DESC`,
       queryParams
     );

@@ -258,6 +258,8 @@ export default function RoutesPage() {
             isSubmitted: dailyMatch?.isSubmitted || false,
             submittedAt: dailyMatch?.submittedAt || null,
             isAutoOptimized: dailyMatch?.isAutoOptimized || false,
+            shiftStatus: dailyMatch?.shiftStatus || null,
+            routeShiftId: dailyMatch?.routeShiftId || null,
           };
         });
 
@@ -1517,7 +1519,7 @@ export default function RoutesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <ShiftTimeDialog open={showShiftTimeDialog} onOpenChange={setShowShiftTimeDialog} />
+      <ShiftTimeDialog open={showShiftTimeDialog} onOpenChange={setShowShiftTimeDialog} selectedDate={selectedDate} />
     </div >
   );
 }
