@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { adminFetch } from '../../lib/admin-api';
 import toast from 'react-hot-toast';
 import { Clock, Calendar, AlertCircle } from 'lucide-react';
@@ -133,6 +133,8 @@ export default function ShiftTimeDialog({ open, onOpenChange, selectedDate }) {
     };
 
     const targetDateStr = format(selectedDate || new Date(), 'yyyy-MM-dd');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const isPastDate = targetDateStr < todayStr;
     const hasActiveOverride = config?.overrideDate === targetDateStr;
 
     return (
@@ -141,7 +143,7 @@ export default function ShiftTimeDialog({ open, onOpenChange, selectedDate }) {
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Clock className="w-5 h-5 text-primary" />
-                        Shift Start Time
+                        Shift Start Time ({format(selectedDate || new Date(), 'MMM dd')})
                     </DialogTitle>
                     <DialogDescription>
                         Set the earliest time delivery staff can start their shifts.
@@ -159,6 +161,13 @@ export default function ShiftTimeDialog({ open, onOpenChange, selectedDate }) {
                                         This applies ONLY to the selected date: <strong>{format(selectedDate || new Date(), 'MMM dd, yyyy')}</strong>
                                     </p>
                                 </div>
+                                {isPastDate && (
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded-md mb-4">
+                                        <p className="text-sm text-red-800">
+                                            This date has already passed. You cannot change the shift start time for past dates.
+                                        </p>
+                                    </div>
+                                )}
 
                                 <div className="grid gap-2">
                                     <Label>Override Start Time</Label>
@@ -196,14 +205,14 @@ export default function ShiftTimeDialog({ open, onOpenChange, selectedDate }) {
                                     )}
                                 </div>
                                 <div className="flex justify-between pt-4">
-                                    <Button variant="outline" onClick={handleClearOverride} disabled={isLoading || isSaving || !config?.overrideDate} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                                    <Button variant="outline" onClick={handleClearOverride} disabled={isLoading || isSaving || !config?.overrideDate || isPastDate} className="text-red-500 hover:text-red-600 hover:bg-red-50">
                                         Clear Any Override
                                     </Button>
-                                    <Button onClick={handleSaveOverride} disabled={isLoading || isSaving}>
+                                    <Button onClick={handleSaveOverride} disabled={isLoading || isSaving || isPastDate}>
                                         {isSaving ? 'Saving...' : 'Save Override'}
                                     </Button>
                                 </div>
-                            </div>
+                        </div>
                     )}
                 </div>
             </DialogContent>
