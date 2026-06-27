@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
         // 1. Check shift start time gate
         const { hour, minute, displayTime } = await getShiftStartTime();
-        const nowIST = getNowIST();
+        const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
         const nowHour = nowIST.getHours();
         const nowMinute = nowIST.getMinutes();
         const canStart = nowHour > hour || (nowHour === hour && nowMinute >= minute);
