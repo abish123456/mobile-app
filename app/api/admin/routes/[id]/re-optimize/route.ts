@@ -12,7 +12,7 @@ import crypto from "crypto";
  */
 export async function POST(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
     const adminId = await getAdminIdFromRequest(req);
@@ -20,7 +20,7 @@ export async function POST(
         return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-        const routeId = params.id;
+        const { id: routeId } = await params;
 
         // 1. Verify the route exists and its RouteShift status
         const routeRes = await query<{ id: string; shiftStatus: string | null; routeShiftId: string | null; serviceRouteName: string }>(

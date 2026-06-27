@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { query, withTransaction } from "../../../../lib/db";
 import crypto from "crypto";
 import { logAction } from "../../../../lib/audit";
+// @ts-ignore
+import jwt from "jsonwebtoken";
 
 // POST /api/route-orders/update-status - Update delivery status
 export async function POST(req: NextRequest) {
@@ -15,7 +17,6 @@ export async function POST(req: NextRequest) {
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
         const jwtToken = authHeader.split(" ")[1];
-        const jwt = require("jsonwebtoken");
         jwtUser = jwt.verify(jwtToken, process.env.JWT_SECRET || "fallback_secret_for_development_only");
       } catch (err) {
         // Fallback to route token validation if JWT fails or isn't a JWT

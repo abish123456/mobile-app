@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../../lib/db";
 import { getStartOfDayIST, formatDateToISO } from "../../../../../lib/timezone";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const jwt = require("jsonwebtoken");
+// @ts-ignore
+import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_development_only";
 

@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { query } from "@/lib/db";
+// @ts-ignore
+import bcrypt from "bcryptjs";
+// @ts-ignore
+import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_development_only";
 
 export async function POST(req: Request) {
-  const bcrypt = require("bcryptjs");
-  const jwt = require("jsonwebtoken");
   try {
     const { identifier, password } = await req.json();
 
