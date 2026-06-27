@@ -158,15 +158,25 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. Set all pending orders to OUT_FOR_DELIVERY
-        await query(
+        const updateRes = await query<{ id: string }>(
             `UPDATE "Order" SET "status" = 'OUT_FOR_DELIVERY', "updatedAt" = NOW()
              WHERE "id" IN (
                SELECT o."id" FROM "RouteOrder" ro
                JOIN "Order" o ON o."id" = ro."orderId"
                WHERE ro."routeId" = $1 AND ro."deliveryStatus" = 'PENDING' AND o."status" != 'CANCELLED'
-             )`,
+             ) RETURNING "id"`,
             [routeId]
         );
+
+        if (updateRes.rows.length > 0) {
+            for (const row of updateRes.rows) {
+                await query(
+                    `INSERT INTO "OrderActivityLog" ("id", "orderId", "action", "description", "metadata", "createdAt")
+                     VALUES ($1, $2, 'OUT_FOR_DELIVERY', 'Order is out for delivery. Shift started.', $3, NOW())`,
+                    [crypto.randomUUID(), row.id, JSON.stringify({ routeId, routeShiftId })]
+                );
+            }
+        }
 
         // 5. Update RouteShift → ACTIVE
         await query(
