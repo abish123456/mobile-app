@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
 import { getAdminIdFromRequest } from "../../../../lib/admin-auth";
+import { logAction } from "../../../../lib/audit";
 
 /**
  * GET /api/admin/shift-start-time
@@ -68,6 +69,15 @@ export async function POST(req: NextRequest) {
                 `UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_MINUTE'`,
                 [String(min)]
             );
+            logAction({
+                actorId: adminId,
+                actorType: 'ADMIN',
+                entity: 'SYSTEM_CONFIG',
+                entityId: 'SHIFT_START_TIME',
+                action: 'UPDATE',
+                newData: { hour, minute: min },
+                description: `Updated global default shift start time to ${hour}:${String(min).padStart(2,'0')}`
+            });
             return NextResponse.json({ success: true, message: `Default shift start time set to ${hour}:${String(min).padStart(2,'0')}.` });
         }
 
@@ -79,11 +89,29 @@ export async function POST(req: NextRequest) {
             await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_DATE'`, [date]);
             await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_HOUR'`, [String(hour)]);
             await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_MINUTE'`, [String(min)]);
+            logAction({
+                actorId: adminId,
+                actorType: 'ADMIN',
+                entity: 'SYSTEM_CONFIG',
+                entityId: 'SHIFT_START_TIME',
+                action: 'UPDATE',
+                newData: { overrideDate: date, hour, minute: min },
+                description: `Set shift start time override for ${date} to ${hour}:${String(min).padStart(2,'0')}`
+            });
             return NextResponse.json({ success: true, message: `Override set for ${date}: ${hour}:${String(min).padStart(2,'0')}.` });
         }
 
         if (type === "clear_override") {
             await query(`UPDATE "SystemConfig" SET "value" = '', "updatedAt" = NOW() WHERE "key" IN ('SHIFT_START_OVERRIDE_DATE','SHIFT_START_OVERRIDE_HOUR','SHIFT_START_OVERRIDE_MINUTE')`);
+            logAction({
+                actorId: adminId,
+                actorType: 'ADMIN',
+                entity: 'SYSTEM_CONFIG',
+                entityId: 'SHIFT_START_TIME',
+                action: 'UPDATE',
+                newData: { overrideCleared: true },
+                description: `Cleared shift start time override. Reverted to global default.`
+            });
             return NextResponse.json({ success: true, message: "Override cleared. Default shift time will be used." });
         }
 

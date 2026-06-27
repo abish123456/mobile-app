@@ -57,7 +57,8 @@ const EVENT_OPTIONS_BY_CATEGORY = {
         link_generated: "Link Generated",
         link_copied: "Link Copied",
         redistribution: "Bulk Order Assignment (Redistribution)",
-        delivery_staff_change: "Delivery Staff Change"
+        delivery_staff_change: "Delivery Staff Change",
+        shift_actions: "Shift Activity"
     },
     customer: {
         all: "All Customer Events",
@@ -76,6 +77,7 @@ const EVENT_OPTIONS_BY_CATEGORY = {
         all: "All System Events",
         login: "Admin Login",
         hub_location: "Hub Location Settings",
+        shift_settings: "Shift Time Settings",
         cutoff_settings: "Adjust Cut-off",
         holiday_settings: "Holiday Settings",
         support_contacts: "Support Contacts",
@@ -86,6 +88,7 @@ const EVENT_OPTIONS_BY_CATEGORY = {
 
 const ENTITY_LABELS = {
     ROUTE: 'Delivery Route',
+    ROUTE_SHIFT: 'Shift Activity',
     DELIVERY_BOY: 'Delivery Staff',
     DELIVERY_STAFF: 'Delivery Staff',
     SERVICE_ROUTE: 'Service Route',
@@ -113,7 +116,11 @@ const ACTION_LABELS = {
     DELETE: 'Removed',
     APPROVE_DEPOSIT_REFUND: 'Approved Refund',
     REJECT_DEPOSIT_REFUND: 'Rejected Refund',
-    TOKEN_GENERATED: 'Generated Link'
+    TOKEN_GENERATED: 'Generated Link',
+    START_SHIFT: 'Shift Started',
+    PAUSE_SHIFT: 'Shift Paused',
+    RESUME_SHIFT: 'Shift Resumed',
+    END_SHIFT: 'Shift Ended'
 };
 
 const DIFF_KEY_LABELS = {
@@ -147,6 +154,11 @@ const DIFF_KEY_LABELS = {
     'areaName': 'Area Name',
     'hubLocation.lat': 'Latitude',
     'hubLocation.lng': 'Longitude',
+    'sameDayCutOffMinute': 'Same-Day Cut-off Minute',
+    'hour': 'Hour',
+    'minute': 'Minute',
+    'overrideDate': 'Override Date',
+    'overrideCleared': 'Override Cleared',
     'cutOffTime': 'Cut Off Time',
     'roleName': 'Role',
     'updatedAt': 'Updated At',

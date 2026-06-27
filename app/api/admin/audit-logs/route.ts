@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
         values.push('ORDER');
       } else if (category === 'route') {
         conditions.push(`al."entity" = ANY($${paramIndex++})`);
-        values.push(['ROUTE', 'SERVICE_ROUTE']);
+        values.push(['ROUTE', 'SERVICE_ROUTE', 'ROUTE_SHIFT']);
       } else if (category === 'customer') {
         conditions.push(`al."entity" = $${paramIndex++}`);
         values.push('CUSTOMER');
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       } else if (category === 'system') {
         conditions.push(`al."entity" = ANY($${paramIndex++}) AND al."entityId" != ANY($${paramIndex++})`);
         values.push(['SYSTEM_SETTING', 'SYSTEM_CONFIG', 'ADMIN', 'ADMIN_ROLE', 'HOLIDAY', 'SUPPORT_CONTACT', 'SESSION']);
-        values.push(['SAME_DAY_CUTOFF_HOUR', 'SAME_DAY_CUTOFF_MINUTE']);
+        values.push(['SAME_DAY_CUTOFF_HOUR', 'SAME_DAY_CUTOFF_MINUTE', 'SHIFT_START_TIME']);
       }
     }
 
@@ -85,8 +85,14 @@ export async function GET(req: NextRequest) {
       } else if (eventType === 'redistribution') {
         conditions.push(`al."entity" = $${paramIndex++} AND al."action" = 'UPDATE' AND al."description" ILIKE '%redistributed%'`);
         values.push('ROUTE');
+      } else if (eventType === 'shift_actions') {
+        conditions.push(`al."entity" = $${paramIndex++}`);
+        values.push('ROUTE_SHIFT');
       } else if (eventType === 'hub_location') {
         conditions.push(`al."entity" = $${paramIndex++} AND al."entityId" = 'HUB_LOCATION'`);
+        values.push('SYSTEM_CONFIG');
+      } else if (eventType === 'shift_settings') {
+        conditions.push(`al."entity" = $${paramIndex++} AND al."entityId" = 'SHIFT_START_TIME'`);
         values.push('SYSTEM_CONFIG');
       } else if (eventType === 'products') {
         conditions.push(`al."entity" = $${paramIndex++}`);
