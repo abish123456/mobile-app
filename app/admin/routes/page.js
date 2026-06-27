@@ -1103,13 +1103,24 @@ export default function RoutesPage() {
                         </TableCell>
                         <TableCell className="text-xs">
                           <Badge 
-                            variant={log.action === 'SUBMITTED' ? 'default' : log.action === 'GENERATED' ? 'secondary' : 'outline'} 
+                            variant={
+                              log.action === 'SUBMITTED' ? 'default' : 
+                              log.action === 'GENERATED' || log.action === 'RESUME_SHIFT' || log.action === 'START_SHIFT' || log.action === 'OPTIMIZE_ROUTE' || log.action === 'RE_OPTIMISED' ? 'secondary' : 
+                              log.action === 'END_SHIFT' ? 'default' :
+                              'outline'
+                            } 
                             className={cn(
                               "text-[10px]", 
-                              log.action === 'SUBMITTED' && "bg-green-600 hover:bg-green-600 text-white font-bold"
+                              log.action === 'SUBMITTED' && "bg-green-600 hover:bg-green-600 text-white font-bold",
+                              log.action === 'START_SHIFT' && "bg-blue-100 text-blue-700 border-blue-200",
+                              log.action === 'PAUSE_SHIFT' && "bg-amber-100 text-amber-700 border-amber-200",
+                              log.action === 'RESUME_SHIFT' && "bg-blue-100 text-blue-700 border-blue-200",
+                              log.action === 'END_SHIFT' && "bg-green-100 text-green-700 border-green-200",
+                              log.action === 'OPTIMIZE_ROUTE' && "bg-purple-100 text-purple-700 border-purple-200",
+                              log.action === 'RE_OPTIMISED' && "bg-purple-100 text-purple-700 border-purple-200"
                             )}
                           >
-                            {log.action}
+                            {log.action.replace('_', ' ')}
                           </Badge>
                         </TableCell>
                       </TableRow>

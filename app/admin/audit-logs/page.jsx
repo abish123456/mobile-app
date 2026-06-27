@@ -644,7 +644,7 @@ export default function AuditLogsPage() {
     const fetchAdminLogs = async (page, limit, categoryFilter = selectedCategory, eventFilter = selectedEventFilter, adminFilter = selectedAdminFilter) => {
         setIsLoadingAdmin(true);
         try {
-            let url = `/api/admin/audit-logs?page=${page}&limit=${limit}&actorType=ADMIN`;
+            let url = `/api/admin/audit-logs?page=${page}&limit=${limit}&actorType=ADMIN,DELIVERY_BOY,SYSTEM`;
             if (categoryFilter !== 'all') {
                 url += `&category=${categoryFilter}`;
             }

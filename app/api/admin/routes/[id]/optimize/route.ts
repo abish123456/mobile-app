@@ -136,6 +136,13 @@ export async function POST(
             description: `Optimised delivery sequences for ${optimizedStops.length} orders in ${routeName}.`
         });
 
+        // Log to RouteTokenLog for UI display
+        await query(
+            `INSERT INTO "RouteTokenLog" ("id", "routeId", "token", "action", "generatedAt", "timestamp")
+             VALUES ($1, $2, 'AUTO_OPTIMIZE', 'OPTIMIZE_ROUTE', NOW(), NOW())`,
+            [crypto.randomUUID(), routeId]
+        );
+
         return NextResponse.json({
             success: true,
             message: `Successfully optimised ${optimizedStops.length} orders.`,

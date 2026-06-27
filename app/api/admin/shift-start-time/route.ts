@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "../../../../lib/db";
 import { getAdminIdFromRequest } from "../../../../lib/admin-auth";
 import { logAction } from "../../../../lib/audit";
+import { getStartOfDayIST, getEndOfDayIST } from "../../../../lib/timezone";
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/admin/shift-start-time
@@ -41,15 +44,16 @@ export async function GET(req: NextRequest) {
  * Helper function to check if any shifts have already started on a given date string (YYYY-MM-DD)
  */
 async function hasShiftsStartedOnDate(dateStr: string): Promise<boolean> {
-    const checkRes = await query(
-        `SELECT 1 FROM "Route" r
+    const startOfDay = getStartOfDayIST(new Date(dateStr));
+    const endOfDay = getEndOfDayIST(new Date(dateStr));
+    const checkRes = await query<{ count: string }>(
+        `SELECT COUNT(*)::bigint as "count" 
+         FROM "Route" r
          JOIN "RouteShift" rs ON rs."routeId" = r."id"
-         WHERE DATE(r."date" AT TIME ZONE 'Asia/Kolkata') = $1
-         AND rs."status" != 'NOT_STARTED'
-         LIMIT 1`,
-        [dateStr]
+         WHERE r."date" >= $1 AND r."date" <= $2 AND rs."status" != 'NOT_STARTED'`,
+        [startOfDay, endOfDay]
     );
-    return checkRes.rows.length > 0;
+    return parseInt(checkRes.rows[0].count, 10) > 0;
 }
 
 /**
@@ -69,6 +73,15 @@ export async function POST(req: NextRequest) {
         if (type === "default") {
             if (hour === undefined || hour < 0 || hour > 23) {
                 return NextResponse.json({ success: false, message: "Invalid hour (0–23)." }, { status: 400 });
+            }
+
+            // Validation: Cannot change global default if shifts have already started TODAY
+            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+            if (await hasShiftsStartedOnDate(todayStr)) {
+                return NextResponse.json({ 
+                    success: false, 
+                    message: `Cannot change global default shift time because one or more staff members have already started their shift today. Please set an override for future dates if needed.` 
+                }, { status: 400 });
             }
             const min = minute ?? 0;
             await query(

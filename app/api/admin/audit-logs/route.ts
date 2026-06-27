@@ -161,8 +161,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (actorType) {
-      conditions.push(`al."actorType" = $${paramIndex++}`);
-      values.push(actorType);
+      if (actorType.includes(',')) {
+        const types = actorType.split(',').map(t => t.trim());
+        conditions.push(`al."actorType" = ANY($${paramIndex++})`);
+        values.push(types);
+      } else {
+        conditions.push(`al."actorType" = $${paramIndex++}`);
+        values.push(actorType);
+      }
     }
 
     // Hide noisy route generation logs from the general admin logs list, only show them inside order details
