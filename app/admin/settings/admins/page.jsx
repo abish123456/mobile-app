@@ -133,6 +133,12 @@ export default function AdminsPage() {
             return;
         }
 
+        const isDeliveryStaff = formData.roleIds.some(rId => roles.find(r => r.id === rId)?.name?.trim().toLowerCase() === 'delivery staff');
+        if (isDeliveryStaff && (!formData.phone || formData.phone.trim().length !== 10)) {
+            toast.error('Please enter a valid 10-digit phone number for Delivery Staff');
+            return;
+        }
+
         setIsSaving(true);
         try {
             const payload = { ...formData };
@@ -284,8 +290,14 @@ export default function AdminsPage() {
                                     <Input 
                                         id="phone" 
                                         value={formData.phone || ''}
-                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                                        placeholder="e.g. +919876543210"
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(/\D/g, '');
+                                            if (val.length <= 10) {
+                                                setFormData({...formData, phone: val});
+                                            }
+                                        }}
+                                        placeholder="e.g. 9876543210"
+                                        maxLength={10}
                                         required={formData.roleIds.some(rId => roles.find(r => r.id === rId)?.name?.toLowerCase() === 'delivery staff')}
                                     />
                                     <p className="text-xs text-muted-foreground">Required for Delivery Staff to assign routes.</p>

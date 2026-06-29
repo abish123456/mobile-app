@@ -75,15 +75,39 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ success: false, message: "Invalid hour (0–23)." }, { status: 400 });
             }
 
-            // Validation: Cannot change global default if shifts have already started TODAY
-            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-            if (await hasShiftsStartedOnDate(todayStr)) {
-                return NextResponse.json({ 
-                    success: false, 
-                    message: `Cannot change global default shift time because one or more staff members have already started their shift today. Please set an override for future dates if needed.` 
-                }, { status: 400 });
-            }
             const min = minute ?? 0;
+            const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+            const shiftsStarted = await hasShiftsStartedOnDate(todayStr);
+
+            let scopeMessage = "";
+
+            if (shiftsStarted) {
+                // Determine current effective time for today
+                const configRes = await query<{ key: string; value: string }>(
+                    `SELECT "key", "value" FROM "SystemConfig"
+                     WHERE "key" IN ('SHIFT_START_HOUR','SHIFT_START_MINUTE','SHIFT_START_OVERRIDE_DATE','SHIFT_START_OVERRIDE_HOUR','SHIFT_START_OVERRIDE_MINUTE')`
+                );
+                const cfg: Record<string, string> = {};
+                configRes.rows.forEach(r => { cfg[r.key] = r.value; });
+
+                const hasTodayOverride = cfg['SHIFT_START_OVERRIDE_DATE'] === todayStr;
+                const effectiveHour = hasTodayOverride && cfg['SHIFT_START_OVERRIDE_HOUR'] ? parseInt(cfg['SHIFT_START_OVERRIDE_HOUR']) : parseInt(cfg['SHIFT_START_HOUR'] || '8');
+                const effectiveMinute = hasTodayOverride && cfg['SHIFT_START_OVERRIDE_MINUTE'] ? parseInt(cfg['SHIFT_START_OVERRIDE_MINUTE']) : parseInt(cfg['SHIFT_START_MINUTE'] || '0');
+
+                // Set override for today with effective time
+                await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_DATE'`, [todayStr]);
+                await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_HOUR'`, [String(effectiveHour)]);
+                await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_MINUTE'`, [String(effectiveMinute)]);
+                
+                scopeMessage = "Only Future Dates (shifts already started today)";
+            } else {
+                // Clear today's override if no shifts started
+                await query(`UPDATE "SystemConfig" SET "value" = '', "updatedAt" = NOW() WHERE "key" IN ('SHIFT_START_OVERRIDE_DATE','SHIFT_START_OVERRIDE_HOUR','SHIFT_START_OVERRIDE_MINUTE')`);
+                
+                scopeMessage = "Today and Future Dates";
+            }
+
+            // Update global config
             await query(
                 `UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_HOUR'`,
                 [String(hour)]
@@ -92,74 +116,29 @@ export async function POST(req: NextRequest) {
                 `UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_MINUTE'`,
                 [String(min)]
             );
-            logAction({
-                actorId: adminId,
-                actorType: 'ADMIN',
-                entity: 'SYSTEM_CONFIG',
-                entityId: 'SHIFT_START_TIME',
-                action: 'UPDATE',
-                newData: { hour, minute: min },
-                description: `Updated global default shift start time to ${hour}:${String(min).padStart(2,'0')}`
-            });
-            return NextResponse.json({ success: true, message: `Default shift start time set to ${hour}:${String(min).padStart(2,'0')}.` });
-        }
-
-        if (type === "override") {
-            if (!date || hour === undefined || hour < 0 || hour > 23) {
-                return NextResponse.json({ success: false, message: "date and valid hour required for override." }, { status: 400 });
-            }
             
-            // Validation: Cannot override if shifts have already started
-            if (await hasShiftsStartedOnDate(date)) {
-                return NextResponse.json({ 
-                    success: false, 
-                    message: `Cannot change shift time for ${date} because one or more staff members have already started their shift.` 
-                }, { status: 400 });
-            }
+            // Get admin details for logging
+            const adminRes = await query<{ name: string }>(`SELECT name FROM "Admin" WHERE id = $1`, [adminId]);
+            const adminName = adminRes.rows.length > 0 ? adminRes.rows[0].name : 'Admin';
 
-            const min = minute ?? 0;
-            await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_DATE'`, [date]);
-            await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_HOUR'`, [String(hour)]);
-            await query(`UPDATE "SystemConfig" SET "value" = $1, "updatedAt" = NOW() WHERE "key" = 'SHIFT_START_OVERRIDE_MINUTE'`, [String(min)]);
             logAction({
                 actorId: adminId,
                 actorType: 'ADMIN',
+                actorName: adminName,
                 entity: 'SYSTEM_CONFIG',
                 entityId: 'SHIFT_START_TIME',
                 action: 'UPDATE',
-                newData: { overrideDate: date, hour, minute: min },
-                description: `Set shift start time override for ${date} to ${hour}:${String(min).padStart(2,'0')}`
+                newData: { hour, minute: min, scope: scopeMessage },
+                description: `Changed shift time to ${hour}:${String(min).padStart(2,'0')}. Applies to: ${scopeMessage}`
             });
-            return NextResponse.json({ success: true, message: `Override set for ${date}: ${hour}:${String(min).padStart(2,'0')}.` });
+            return NextResponse.json({ 
+                success: true, 
+                message: `Shift time set to ${hour}:${String(min).padStart(2,'0')}.`,
+                scope: shiftsStarted ? 'future' : 'all'
+            });
         }
 
-        if (type === "clear_override") {
-            // Check current override date to see if shifts have already started
-            const currentOverrideRes = await query<{ value: string }>(`SELECT value FROM "SystemConfig" WHERE key = 'SHIFT_START_OVERRIDE_DATE'`);
-            if (currentOverrideRes.rows.length > 0 && currentOverrideRes.rows[0].value) {
-                const currentDate = currentOverrideRes.rows[0].value;
-                if (await hasShiftsStartedOnDate(currentDate)) {
-                    return NextResponse.json({ 
-                        success: false, 
-                        message: `Cannot clear shift time override for ${currentDate} because one or more staff members have already started their shift.` 
-                    }, { status: 400 });
-                }
-            }
-
-            await query(`UPDATE "SystemConfig" SET "value" = '', "updatedAt" = NOW() WHERE "key" IN ('SHIFT_START_OVERRIDE_DATE','SHIFT_START_OVERRIDE_HOUR','SHIFT_START_OVERRIDE_MINUTE')`);
-            logAction({
-                actorId: adminId,
-                actorType: 'ADMIN',
-                entity: 'SYSTEM_CONFIG',
-                entityId: 'SHIFT_START_TIME',
-                action: 'UPDATE',
-                newData: { overrideCleared: true },
-                description: `Cleared shift start time override. Reverted to global default.`
-            });
-            return NextResponse.json({ success: true, message: "Override cleared. Default shift time will be used." });
-        }
-
-        return NextResponse.json({ success: false, message: "Invalid type. Use 'default', 'override', or 'clear_override'." }, { status: 400 });
+        return NextResponse.json({ success: false, message: "Invalid type. Use 'default'." }, { status: 400 });
 
     } catch (error) {
         console.error("Error in POST /api/admin/shift-start-time:", error);

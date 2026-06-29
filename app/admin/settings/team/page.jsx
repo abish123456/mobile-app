@@ -339,7 +339,9 @@ export default function RolesPermissionsPage() {
             const res = await adminFetch('/api/admin/roles');
             const data = await res.json();
             if (data.success) {
-                setRoles(data.roles || []);
+                // Hide 'Delivery Staff' from the roles management table
+                const filteredRoles = (data.roles || []).filter(r => !r.name?.toLowerCase().includes('delivery staff'));
+                setRoles(filteredRoles);
             } else {
                 toast.error(data.message || 'Failed to load roles');
             }

@@ -18,16 +18,19 @@ export async function POST(req: NextRequest) {
         const todayIST = getTodayIST();
 
         // Find today's RouteShift for this delivery boy (specific route if provided)
-        const shiftRes = await query<{ routeShiftId: string; shiftStatus: string; routeId: string; serviceRouteName: string }>(
-            `SELECT rs."id" as "routeShiftId", rs."status" as "shiftStatus", r."id" as "routeId", sr."name" as "serviceRouteName"
+        const queryText = `SELECT rs."id" as "routeShiftId", rs."status" as "shiftStatus", r."id" as "routeId", sr."name" as "serviceRouteName"
              FROM "RouteShift" rs
              JOIN "Route" r ON r."id" = rs."routeId"
              JOIN "ServiceRoute" sr ON sr."id" = r."serviceRouteId"
              WHERE r."deliveryBoyId" = $1
                AND (r."date" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date = $2::date
-               ${body.routeId ? `AND r."id" = '${body.routeId}'` : ''}
-             LIMIT 1`,
-            [deliveryBoyId, todayIST]
+               ${body.routeId ? 'AND r."id" = $3' : ''}
+             LIMIT 1`;
+        const queryParams = body.routeId ? [deliveryBoyId, todayIST, body.routeId] : [deliveryBoyId, todayIST];
+
+        const shiftRes = await query<{ routeShiftId: string; shiftStatus: string; routeId: string; serviceRouteName: string }>(
+            queryText,
+            queryParams
         );
 
         if (shiftRes.rows.length === 0) {
