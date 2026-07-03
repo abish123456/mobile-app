@@ -327,10 +327,9 @@ export async function POST(req: NextRequest) {
       id: string;
       name: string;
       depositWalletBalance: number;
-      generalWalletBalance: number;
       cansInHand: number;
     }>(
-      `SELECT "id", "name", "depositWalletBalance", "generalWalletBalance", "cansInHand"
+      `SELECT "id", "name", "depositWalletBalance", "cansInHand"
        FROM "Customer"
        WHERE "id" = $1`,
       [customerId],
@@ -623,13 +622,7 @@ export async function POST(req: NextRequest) {
     // - cansInHand is adjusted only on delivery, based on actual delivered vs returned cans.
     const walletDelta = 0;
     const cansDelta = 0;
-
-    // Apply General Wallet balance for ONLINE orders (auto-deduct to reduce Razorpay amount)
-    const generalWalletAvailable = Math.max(0, customer.generalWalletBalance || 0);
-    const subtotalAmount = Math.round(subtotal + totalGstAmount + depositToPay);
-    const generalWalletDeduction = paymentType === 'ONLINE' ? Math.min(generalWalletAvailable, subtotalAmount) : 0;
-    const totalAmount = Math.max(0, subtotalAmount - generalWalletDeduction);
-    const totalAmountWithoutWallet = subtotalAmount; // for DB storage of original amount
+    const totalAmount = Math.round(subtotal + totalGstAmount + depositToPay);
 
 
     // Verify total quantity matches
@@ -974,7 +967,7 @@ export async function POST(req: NextRequest) {
           address.id,
           cartRes.rows[0]?.productId || null, // Keep the first product ID for backward compatibility
           quantity,
-          Math.round(totalAmount * 100), // Store the actual amount customer pays (after wallet deduction)
+          totalAmountInPaise,
           Math.round(depositToPay * 100),
           deliveryDate,
           normalizedSlot,
@@ -1034,29 +1027,6 @@ export async function POST(req: NextRequest) {
          WHERE "id" = $4`,
         [walletDelta, cansDelta, now, customer.id]
       );
-
-      // 4b. Deduct General Wallet if used
-      if (generalWalletDeduction > 0) {
-        await client.query(
-          `UPDATE "Customer" SET "generalWalletBalance" = "generalWalletBalance" - $1, "updatedAt" = NOW() WHERE "id" = $2`,
-          [generalWalletDeduction, customer.id]
-        );
-        await client.query(
-          `INSERT INTO "WalletTransaction"
-           ("id", "customerId", "amount", "type", "walletCategory", "referenceType", "referenceId", "description", "createdAt")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
-          [
-            crypto.randomUUID(),
-            customer.id,
-            -generalWalletDeduction,
-            'DEBIT',
-            'GENERAL',
-            'ORDER',
-            orderId,
-            `General wallet applied to Order #${orderNumber}`
-          ]
-        );
-      }
 
       // 5. Update Return Requests status
       if (pendingReturnRequestIds.length > 0) {

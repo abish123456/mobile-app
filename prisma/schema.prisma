@@ -13,7 +13,6 @@ model Customer {
   name                        String?
   razorpayCustomerId          String?
   depositWalletBalance        Float                        @default(0)
-  generalWalletBalance        Float                        @default(0)
   cansInHand                  Int                          @default(0)
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
@@ -49,7 +48,6 @@ model WalletTransaction {
   customerId    String
   amount        Float // Positive for credit, negative for debit
   type          String // CREDIT, DEBIT
-  walletCategory String  @default("DEPOSIT") // DEPOSIT or GENERAL
   referenceType String // ORDER, MANUAL_ADJUSTMENT, REFUND
   referenceId   String? // ID of the order or other reference
   description   String?
@@ -108,8 +106,6 @@ model Order {
   originalQuantity   Int?
   paymentInstrument  String?
   isQrPayment        Boolean       @default(false)
-  isQuantityEdited   Boolean       @default(false)
-  quantityEditNote   String?
   address            Address       @relation(fields: [addressId], references: [id])
   customer           Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   product            Product?      @relation(fields: [productId], references: [id])

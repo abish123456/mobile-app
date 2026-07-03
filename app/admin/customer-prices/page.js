@@ -118,7 +118,6 @@ export default function CustomerPricesPage() {
     customerPhone: '',
     cansInHand: '',
     depositWalletBalance: '',
-    generalWalletBalance: '',
     customerAddress: {
       line1: '',
       line2: '',
@@ -228,7 +227,6 @@ export default function CustomerPricesPage() {
       customerPhone: customer.phone || '',
       cansInHand: customer.cansInHand || 0,
       depositWalletBalance: customer.depositWalletBalance || 0,
-      generalWalletBalance: customer.generalWalletBalance || 0,
       customerAddress: {
         line1: customer.line1 || '',
         line2: customer.line2 || '',
@@ -344,7 +342,6 @@ export default function CustomerPricesPage() {
           phone: formData.customerPhone,
           cansInHand: formData.cansInHand,
           depositWalletBalance: formData.depositWalletBalance,
-          generalWalletBalance: formData.generalWalletBalance,
           address: formData.customerAddress,
           active: formData.active,
           city: formData.customerAddress.city,
@@ -653,7 +650,6 @@ export default function CustomerPricesPage() {
                     <TableHead className="text-center">Address</TableHead>
                     <TableHead className="text-center text-sm">Prices</TableHead>
                     <TableHead className="text-center">Deposit Amount</TableHead>
-                    <TableHead className="text-center">General Wallet</TableHead>
                     {hasPermission('edit_customer_details') && (
                       <TableHead className="text-center">Actions</TableHead>
                     )}
@@ -743,11 +739,6 @@ export default function CustomerPricesPage() {
                               >
                                 <History className="h-4 w-4" />
                               </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex items-center justify-center font-semibold text-amber-600">
-                              ₹{Math.ceil(Number(customer.generalWalletBalance || 0))}
                             </div>
                           </TableCell>
                           {hasPermission('edit_customer_details') && (
@@ -1057,22 +1048,6 @@ export default function CustomerPricesPage() {
                               readOnly
                               className="bg-muted truncate"
                               placeholder="Area"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="generalWalletBalance">General Wallet (₹)</Label>
-                            <Input
-                              id="generalWalletBalance"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={formData.generalWalletBalance}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  generalWalletBalance: e.target.value
-                                })
-                              }
                             />
                           </div>
                         </div>
