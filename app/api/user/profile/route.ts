@@ -24,9 +24,10 @@ export async function GET(req: NextRequest) {
       id: string;
       name: string | null;
       depositWalletBalance: number;
+      generalWalletBalance: number;
       cansInHand: number;
     }>(
-      `SELECT "id", "name", "depositWalletBalance", "cansInHand"
+      `SELECT "id", "name", "depositWalletBalance", "generalWalletBalance", "cansInHand"
        FROM "Customer"
        WHERE "id" = $1`,
       [customerId],
@@ -243,6 +244,7 @@ export async function GET(req: NextRequest) {
       id: customer.id, // Customer ID for admin reference
       name: customer.name || "",
       depositWalletBalance: customer.depositWalletBalance || 0,
+      generalWalletBalance: customer.generalWalletBalance || 0,
       cansInHand: customer.cansInHand || 0, // RAW DB value
       pendingOrdered: pendingOrdered,
       pendingReturned: pendingReturned,

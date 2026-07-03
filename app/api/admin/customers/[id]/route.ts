@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         // Fetch Customer Profile
         const customerRes = await query(
             `SELECT 
-        c."id", c."name", c."phone", c."depositWalletBalance", c."cansInHand", c."createdAt",
+        c."id", c."name", c."phone", c."depositWalletBalance", c."generalWalletBalance", c."cansInHand", c."createdAt",
         a."line1", a."line2", a."area", a."city", a."pincode", a."isDefault"
        FROM "Customer" c
        LEFT JOIN "Address" a ON c."id" = a."customerId"

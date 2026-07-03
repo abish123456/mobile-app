@@ -50,6 +50,8 @@ export async function GET(
       providerPaymentId: string | null;
       notDeliveredReason: string | null;
       isQrPayment: boolean;
+      isQuantityEdited: boolean;
+      quantityEditNote: string | null;
     }>(
       `SELECT
         o."id",
@@ -66,6 +68,8 @@ export async function GET(
         o."paymentMethod",
         o."paymentInstrument",
         o."isQrPayment",
+        o."isQuantityEdited",
+        o."quantityEditNote",
         o."createdAt",
 
         o."updatedAt",
@@ -231,6 +235,8 @@ export async function GET(
         isAssigned: !!order.deliveryBoyName, // Only true if an actual RouteOrder assignment exists
         isRouteGenerated: !!order.routeToken,
         isQrPayment: order.isQrPayment,
+        isQuantityEdited: order.isQuantityEdited,
+        quantityEditNote: order.quantityEditNote,
         notDeliveredReason: order.notDeliveredReason,
         items: (await query<{
           id: string;
@@ -306,6 +312,10 @@ export async function PATCH(
       }
     } else if (action === 'UPDATE_ADDRESS') {
       if (!(await verifyAdminAuthWithPermission(req, "edit_order_address"))) {
+        return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
+      }
+    } else if (action === 'UPDATE_QUANTITY') {
+      if (!(await verifyAdminAuthWithPermission(req, "edit_orders"))) {
         return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
       }
     } else {
@@ -631,4 +641,185 @@ export async function PATCH(
   }
 }
 
+// PUT /api/admin/orders/[id] - Update order quantity
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    if (!(await verifyAdminAuthWithPermission(req, "edit_orders"))) {
+      return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
+    }
 
+    const { id: orderId } = await params;
+    const body = await req.json();
+    const { newQuantity } = body;
+
+    if (!newQuantity || typeof newQuantity !== 'number' || newQuantity < 1) {
+      return NextResponse.json({ success: false, message: "Invalid quantity" }, { status: 400 });
+    }
+
+    // Fetch current order details
+    const orderRes = await query<{
+      status: string;
+      paymentStatus: string;
+      paymentMethod: string;
+      quantity: number;
+      amount: number;
+      originalQuantity: number | null;
+      additionalQuantity: number | null;
+      customerId: string;
+      orderNumber: string | null;
+    }>(
+      `SELECT o."status", o."paymentStatus", o."paymentMethod", o."quantity", o."amount",
+              o."originalQuantity", o."additionalQuantity", o."customerId", o."orderNumber"
+       FROM "Order" o WHERE o."id" = $1`,
+      [orderId]
+    );
+
+    if (orderRes.rows.length === 0) {
+      return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 });
+    }
+
+    const order = orderRes.rows[0];
+
+    if (order.status === 'DELIVERED' || order.status === 'CANCELLED') {
+      return NextResponse.json(
+        { success: false, message: `Cannot edit quantity of a ${order.status.toLowerCase()} order` },
+        { status: 400 }
+      );
+    }
+
+    if (order.quantity === newQuantity) {
+      return NextResponse.json({ success: false, message: "New quantity is the same as current quantity" }, { status: 400 });
+    }
+
+    // Get price per can from OrderItem
+    const itemRes = await query<{ price: number; productId: string }>(
+      `SELECT "price", "productId" FROM "OrderItem" WHERE "orderId" = $1 LIMIT 1`,
+      [orderId]
+    );
+    if (itemRes.rows.length === 0) {
+      return NextResponse.json({ success: false, message: "Order items not found" }, { status: 404 });
+    }
+
+    const pricePerCan = itemRes.rows[0].price; // already in rupees
+    const delta = newQuantity - order.quantity;
+    const diffAmount = Math.abs(delta) * pricePerCan; // rupees
+    const diffAmountPaise = Math.round(diffAmount * 100);
+    const currentAmountPaise = order.amount;
+    const isOnlinePaid = order.paymentMethod === 'ONLINE' && order.paymentStatus === 'SUCCESS';
+    const isDecrease = delta < 0;
+
+    const { withTransaction } = await import("../../../../../lib/db");
+    const adminId = await getAdminIdFromRequest(req);
+
+    let editNote = '';
+
+    await withTransaction(async (client) => {
+      // 1. Update OrderItem quantity
+      await client.query(
+        `UPDATE "OrderItem" SET "quantity" = $1 WHERE "orderId" = $2`,
+        [newQuantity, orderId]
+      );
+
+      if (isDecrease) {
+        // --- DECREASE ---
+        const newAmountPaise = Math.max(0, currentAmountPaise - diffAmountPaise);
+
+        if (isOnlinePaid) {
+          // Credit the difference to general wallet
+          await client.query(
+            `UPDATE "Customer" SET "generalWalletBalance" = "generalWalletBalance" + $1, "updatedAt" = NOW() WHERE "id" = $2`,
+            [diffAmount, order.customerId]
+          );
+          await client.query(
+            `INSERT INTO "WalletTransaction"
+             ("id", "customerId", "amount", "type", "walletCategory", "referenceType", "referenceId", "description", "createdAt")
+             VALUES ($1, $2, $3, 'CREDIT', 'GENERAL', 'ORDER_ADJUSTMENT', $4, $5, NOW())`,
+            [
+              crypto.randomUUID(),
+              order.customerId,
+              diffAmount,
+              orderId,
+              `Refund for quantity decrease on Order #${order.orderNumber || orderId.slice(-8).toUpperCase()} (${Math.abs(delta)} fewer cans)`
+            ]
+          );
+          editNote = `Decreased by ${Math.abs(delta)} (₹${diffAmount.toFixed(2)} credited to General Wallet)`;
+        } else {
+          // COD — just reduce amount
+          editNote = `Decreased by ${Math.abs(delta)} (COD amount reduced by ₹${diffAmount.toFixed(2)})`;
+        }
+
+        // Update order: new quantity and amount
+        await client.query(
+          `UPDATE "Order" SET
+             "quantity" = $1,
+             "amount" = $2,
+             "isQuantityEdited" = true,
+             "quantityEditNote" = $3,
+             "updatedAt" = NOW()
+           WHERE "id" = $4`,
+          [newQuantity, newAmountPaise, editNote, orderId]
+        );
+
+      } else {
+        // --- INCREASE ---
+        const newAmountPaise = currentAmountPaise + diffAmountPaise;
+        const origQty = order.originalQuantity ?? order.quantity; // preserve the very first original quantity
+        const prevAdditional = order.additionalQuantity ?? 0;
+        const newAdditional = prevAdditional + delta;
+        editNote = `Increased by ${delta} (extra ${delta} can${delta > 1 ? 's' : ''} to be collected as COD)`;
+
+        await client.query(
+          `UPDATE "Order" SET
+             "quantity" = $1,
+             "amount" = $2,
+             "originalQuantity" = $3,
+             "additionalQuantity" = $4,
+             "isQuantityEdited" = true,
+             "quantityEditNote" = $5,
+             "updatedAt" = NOW()
+           WHERE "id" = $6`,
+          [newQuantity, newAmountPaise, origQty, newAdditional, editNote, orderId]
+        );
+      }
+
+      // 2. Log activity
+      await client.query(
+        `INSERT INTO "OrderActivityLog" ("id", "orderId", "action", "description", "metadata", "createdAt")
+         VALUES ($1, $2, 'QUANTITY_UPDATED', $3, $4, NOW())`,
+        [
+          crypto.randomUUID(),
+          orderId,
+          `Admin updated quantity from ${order.quantity} to ${newQuantity}. ${editNote}`,
+          JSON.stringify({ oldQuantity: order.quantity, newQuantity, delta, editNote, adminId })
+        ]
+      );
+    });
+
+    logAction({
+      actorId: adminId,
+      actorType: 'ADMIN',
+      entity: 'ORDER',
+      entityId: orderId,
+      action: 'UPDATE',
+      oldData: { quantity: order.quantity, amount: currentAmountPaise / 100 },
+      newData: { quantity: newQuantity, amount: (currentAmountPaise + (isDecrease ? -diffAmountPaise : diffAmountPaise)) / 100 },
+      description: `Admin edited order quantity: ${editNote}`,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Order quantity updated successfully. ${editNote}`,
+      editNote,
+    });
+
+  } catch (error) {
+    console.error("Error in PUT /api/admin/orders/[id]:", error);
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

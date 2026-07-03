@@ -118,6 +118,12 @@ export default function AdminOrdersPage() {
   const [orderToEditAddress, setOrderToEditAddress] = useState(null);
   const [editAddressData, setEditAddressData] = useState({});
 
+  // Edit Quantity state
+  const [showEditQtyDialog, setShowEditQtyDialog] = useState(false);
+  const [isEditingQty, setIsEditingQty] = useState(false);
+  const [editQtyOrder, setEditQtyOrder] = useState(null);
+  const [editQtyValue, setEditQtyValue] = useState(1);
+
   // Cleanup abandoned orders state
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
@@ -585,6 +591,47 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const openEditQtyDialog = (order) => {
+    setEditQtyOrder(order);
+    setEditQtyValue(order.quantity || 1);
+    setShowEditQtyDialog(true);
+  };
+
+  const handleEditQuantity = async () => {
+    if (!editQtyOrder) return;
+    if (editQtyValue === editQtyOrder.quantity) {
+      toast.error('New quantity is the same as current quantity');
+      return;
+    }
+    setIsEditingQty(true);
+    try {
+      const response = await adminFetch(`/api/admin/orders/${editQtyOrder.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newQuantity: editQtyValue }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success(data.message || 'Quantity updated successfully');
+        setShowEditQtyDialog(false);
+        // Refresh order detail if open
+        if (selectedOrder && selectedOrder.id === editQtyOrder.id) {
+          const refreshRes = await adminFetch(`/api/admin/orders/${editQtyOrder.id}`);
+          const refreshData = await refreshRes.json();
+          if (refreshData.success) setSelectedOrder(refreshData.order);
+        }
+        fetchOrders();
+      } else {
+        toast.error(data.message || 'Failed to update quantity');
+      }
+    } catch (err) {
+      console.error('Error updating quantity:', err);
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsEditingQty(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -902,6 +949,9 @@ export default function AdminOrdersPage() {
                             ? `${order.items.length} ${order.items.length === 1 ? 'item' : 'items'}`
                             : order.productName || 'Water Can'}
                         </div>
+                        {order.isQuantityEdited && (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[9px] px-1 py-0 mt-0.5 font-bold uppercase">Qty Edited</Badge>
+                        )}
                       </div>
                       <div>
                         <div className="text-[11px] text-muted-foreground uppercase">Amount</div>
@@ -1061,6 +1111,18 @@ export default function AdminOrdersPage() {
                                     <span className="text-foreground/80 font-semibold">{order.productName || 'Water Can'}</span>
                                     <span className="text-[10px] text-muted-foreground font-bold bg-muted/50 px-1.5 py-0.5 rounded-sm">x{order.quantity}</span>
                                   </div>
+                                )}
+                                {order.isQuantityEdited && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[9px] px-1.5 py-0.5 mt-1 font-bold uppercase cursor-help">Qty Edited</Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-[200px] text-xs">
+                                        <p>{order.quantityEditNote || 'Quantity was edited by admin'}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 )}
                               </div>
                             </TableCell>
@@ -1427,6 +1489,9 @@ export default function AdminOrdersPage() {
                               ? `${selectedOrder.originalQuantity} + ${selectedOrder.additionalQuantity} cans`
                               : `${selectedOrder.quantity} can${selectedOrder.quantity !== 1 ? 's' : ''}`}
                           </p>
+                          {selectedOrder.isQuantityEdited && (
+                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[9px] px-1.5 py-0 mt-1 font-bold uppercase">Qty Edited</Badge>
+                          )}
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Amount</p>
@@ -1636,6 +1701,18 @@ export default function AdminOrdersPage() {
                         </Button>
                       )}
 
+                    {/* Edit Quantity Button */}
+                    {selectedOrder.status !== 'DELIVERED' && selectedOrder.status !== 'CANCELLED' && hasPermission('edit_orders') && (
+                      <Button
+                        variant="outline"
+                        className="border-amber-400 text-amber-700 hover:bg-amber-50"
+                        onClick={() => openEditQtyDialog(selectedOrder)}
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit Quantity
+                      </Button>
+                    )}
+
                     {/* Cancel Button */}
                     {selectedOrder.status !== 'DELIVERED' && selectedOrder.status !== 'CANCELLED' && hasPermission('cancel_order') && (
                       <Button
@@ -1661,6 +1738,77 @@ export default function AdminOrdersPage() {
               </div>
             ) : null}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Quantity Dialog */}
+      <Dialog open={showEditQtyDialog} onOpenChange={setShowEditQtyDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Order Quantity</DialogTitle>
+            <DialogDescription>
+              Order #{editQtyOrder?.orderNumber || editQtyOrder?.id?.slice(-8).toUpperCase()}
+              {editQtyOrder?.paymentMethod === 'ONLINE' && editQtyOrder?.paymentStatus === 'SUCCESS' && (
+                <span className="block mt-1 text-amber-700 font-medium">
+                  ⚠️ Decreasing an online paid order will credit the difference to the customer's General Wallet.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {editQtyOrder?.isQuantityEdited && editQtyOrder?.quantityEditNote && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs">
+                <strong>Previous edit:</strong> {editQtyOrder.quantityEditNote}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Current Quantity: <strong>{editQtyOrder?.quantity}</strong></Label>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setEditQtyValue(v => Math.max(1, v - 1))}
+                  disabled={editQtyValue <= 1}
+                >
+                  <span className="text-xl font-bold">−</span>
+                </Button>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editQtyValue}
+                  onChange={e => setEditQtyValue(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-20 text-center text-lg font-bold"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setEditQtyValue(v => v + 1)}
+                >
+                  <span className="text-xl font-bold">+</span>
+                </Button>
+              </div>
+              {editQtyValue !== editQtyOrder?.quantity && (
+                <p className="text-xs text-muted-foreground">
+                  {editQtyValue > (editQtyOrder?.quantity || 0)
+                    ? `Increasing by ${editQtyValue - (editQtyOrder?.quantity || 0)} can(s). Extra amount collected as COD.`
+                    : `Decreasing by ${(editQtyOrder?.quantity || 0) - editQtyValue} can(s).`
+                  }
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditQtyDialog(false)} disabled={isEditingQty}>Cancel</Button>
+            <Button
+              onClick={handleEditQuantity}
+              disabled={isEditingQty || editQtyValue === editQtyOrder?.quantity}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {isEditingQty ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : 'Confirm Change'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
