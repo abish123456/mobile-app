@@ -49,7 +49,10 @@ export default function AdminsPage() {
         name: '',
         phone: '',
         roleIds: [],
-        active: true
+        active: true,
+        employeeCode: '',
+        dateOfJoining: '',
+        residentialAddress: ''
     });
 
     useEffect(() => {
@@ -123,19 +126,23 @@ export default function AdminsPage() {
     const handleCreateAdmin = async (e) => {
         e.preventDefault();
         
+        if (!formData.employeeCode) {
+            toast.error('Employee Code / ID is required');
+            return;
+        }
+
         if (!formData.username || !formData.email) {
             toast.error('Username and email are required');
             return;
         }
 
-        if (!formData.id && !formData.password) {
-            toast.error('Password is required for new admins');
+        if (!formData.phone || formData.phone.trim().length !== 10) {
+            toast.error('A valid 10-digit phone number is required');
             return;
         }
 
-        const isDeliveryStaff = formData.roleIds.some(rId => roles.find(r => r.id === rId)?.name?.trim().toLowerCase() === 'delivery staff');
-        if (isDeliveryStaff && (!formData.phone || formData.phone.trim().length !== 10)) {
-            toast.error('Please enter a valid 10-digit phone number for Delivery Staff');
+        if (!formData.id && !formData.password) {
+            toast.error('Password is required for new admins');
             return;
         }
 
@@ -164,7 +171,10 @@ export default function AdminsPage() {
                     name: '',
                     phone: '',
                     roleIds: [],
-                    active: true
+                    active: true,
+                    employeeCode: '',
+                    dateOfJoining: '',
+                    residentialAddress: ''
                 });
                 fetchAdmins();
             } else {
@@ -202,6 +212,19 @@ export default function AdminsPage() {
                     </DialogHeader>
                     <form onSubmit={handleCreateAdmin} className="space-y-6 mt-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Employee Code / ID */}
+                            <div className="space-y-2">
+                                <Label htmlFor="employeeCode">Employee Code / ID <span className="text-destructive">*</span></Label>
+                                <Input 
+                                    id="employeeCode" 
+                                    value={formData.employeeCode || ''}
+                                    onChange={(e) => setFormData({...formData, employeeCode: e.target.value})}
+                                    placeholder="e.g. EMP-101"
+                                    required
+                                />
+                            </div>
+
+                            {/* Full Name */}
                             <div className="space-y-2">
                                 <Label htmlFor="name">Full Name</Label>
                                 <Input 
@@ -211,6 +234,8 @@ export default function AdminsPage() {
                                     placeholder="e.g. John Doe"
                                 />
                             </div>
+
+                            {/* Email Address */}
                             <div className="space-y-2">
                                 <Label htmlFor="email">Email Address <span className="text-destructive">*</span></Label>
                                 <Input 
@@ -222,6 +247,68 @@ export default function AdminsPage() {
                                     required
                                 />
                             </div>
+
+                            {/* Phone Number */}
+                            <div className="space-y-2">
+                                <Label htmlFor="phone">Phone Number <span className="text-destructive">*</span></Label>
+                                <Input 
+                                    id="phone" 
+                                    value={formData.phone || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '');
+                                        if (val.length <= 10) {
+                                            setFormData({...formData, phone: val});
+                                        }
+                                    }}
+                                    placeholder="e.g. 9876543210"
+                                    maxLength={10}
+                                    required
+                                />
+                            </div>
+
+                            {/* Date of Joining */}
+                            <div className="space-y-2">
+                                <Label htmlFor="dateOfJoining">Date of Joining</Label>
+                                <Input 
+                                    id="dateOfJoining" 
+                                    type="date"
+                                    value={formData.dateOfJoining || ''}
+                                    onChange={(e) => setFormData({...formData, dateOfJoining: e.target.value})}
+                                />
+                            </div>
+
+                            {/* Account is Active Checkbox */}
+                            <div className="flex items-center h-full pt-6">
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="active" 
+                                        checked={formData.active}
+                                        onCheckedChange={(checked) => setFormData({...formData, active: checked})}
+                                    />
+                                    <Label htmlFor="active" className="cursor-pointer text-sm font-medium text-slate-700">
+                                        Account is Active
+                                    </Label>
+                                </div>
+                            </div>
+
+                            {/* Residential Address */}
+                            <div className="space-y-2 col-span-1 md:col-span-2">
+                                <Label htmlFor="residentialAddress">Residential Address</Label>
+                                <Input 
+                                    id="residentialAddress" 
+                                    value={formData.residentialAddress || ''}
+                                    onChange={(e) => setFormData({...formData, residentialAddress: e.target.value})}
+                                    placeholder="Enter complete residential address"
+                                />
+                            </div>
+
+                            {/* Login Details Heading */}
+                            <div className="col-span-1 md:col-span-2 border-t pt-4 mt-2">
+                                <h3 className="text-base font-semibold text-slate-800">Login Details</h3>
+                                <p className="text-xs text-slate-500">Set the username and password for dashboard access</p>
+                            </div>
+
+                            {/* Username */}
                             <div className="space-y-2">
                                 <Label htmlFor="username">Username <span className="text-destructive">*</span></Label>
                                 <Input 
@@ -232,6 +319,8 @@ export default function AdminsPage() {
                                     required
                                 />
                             </div>
+
+                            {/* Password */}
                             <div className="space-y-2">
                                 <Label htmlFor="password">
                                     Password {!formData.id && <span className="text-destructive">*</span>}
@@ -246,37 +335,35 @@ export default function AdminsPage() {
                                     required={!formData.id}
                                 />
                             </div>
-                            <div className="space-y-2 col-span-1 md:col-span-2">
-                                <Label>Role Assignment</Label>
+
+                            {/* Access Control / Role Assignment */}
+                            <div className="space-y-2 col-span-1 md:col-span-2 border-t pt-4 mt-2">
+                                <Label className="text-base font-semibold text-slate-800">Role Assignment</Label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2 p-4 border rounded-md">
                                     <div className="flex items-center space-x-2">
-                                        <Checkbox 
+                                        <input 
+                                            type="radio"
                                             id="role-super-admin" 
+                                            name="admin-role"
                                             checked={formData.roleIds.length === 0}
-                                            onCheckedChange={(checked) => {
-                                                if (checked) setFormData({...formData, roleIds: []});
-                                            }}
+                                            onChange={() => setFormData({...formData, roleIds: []})}
+                                            className="h-4 w-4 rounded-full border border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                         />
-                                        <Label htmlFor="role-super-admin" className="cursor-pointer font-semibold">
+                                        <Label htmlFor="role-super-admin" className="cursor-pointer font-semibold text-slate-700">
                                             Super Admin (All Access)
                                         </Label>
                                     </div>
                                     {roles.map(role => (
                                         <div key={role.id} className="flex items-center space-x-2">
-                                            <Checkbox 
+                                            <input 
+                                                type="radio"
                                                 id={`role-${role.id}`}
-                                                checked={formData.roleIds.includes(role.id)}
-                                                onCheckedChange={(checked) => {
-                                                    let newRoles = [...formData.roleIds];
-                                                    if (checked) {
-                                                        newRoles.push(role.id);
-                                                    } else {
-                                                        newRoles = newRoles.filter(id => id !== role.id);
-                                                    }
-                                                    setFormData({...formData, roleIds: newRoles});
-                                                }}
+                                                name="admin-role"
+                                                checked={formData.roleIds.includes(role.id) && formData.roleIds.length === 1}
+                                                onChange={() => setFormData({...formData, roleIds: [role.id]})}
+                                                className="h-4 w-4 rounded-full border border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                             />
-                                            <Label htmlFor={`role-${role.id}`} className="cursor-pointer">
+                                            <Label htmlFor={`role-${role.id}`} className="cursor-pointer text-slate-600">
                                                 {role.name}
                                             </Label>
                                         </div>
@@ -284,38 +371,6 @@ export default function AdminsPage() {
                                 </div>
                             </div>
 
-                            {formData.roleIds.some(rId => roles.find(r => r.id === rId)?.name?.toLowerCase() === 'delivery staff') && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="phone">Phone Number <span className="text-destructive">*</span></Label>
-                                    <Input 
-                                        id="phone" 
-                                        value={formData.phone || ''}
-                                        onChange={(e) => {
-                                            const val = e.target.value.replace(/\D/g, '');
-                                            if (val.length <= 10) {
-                                                setFormData({...formData, phone: val});
-                                            }
-                                        }}
-                                        placeholder="e.g. 9876543210"
-                                        maxLength={10}
-                                        required={formData.roleIds.some(rId => roles.find(r => r.id === rId)?.name?.toLowerCase() === 'delivery staff')}
-                                    />
-                                    <p className="text-xs text-muted-foreground">Required for Delivery Staff to assign routes.</p>
-                                </div>
-                            )}
-                            
-                            <div className="space-y-2 flex flex-col justify-center mt-2">
-                                <div className="flex items-center space-x-2">
-                                    <Checkbox 
-                                        id="active" 
-                                        checked={formData.active}
-                                        onCheckedChange={(checked) => setFormData({...formData, active: checked})}
-                                    />
-                                    <Label htmlFor="active" className="cursor-pointer">
-                                        Account is Active
-                                    </Label>
-                                </div>
-                            </div>
                         </div>
 
                         <DialogFooter>
@@ -333,29 +388,21 @@ export default function AdminsPage() {
 
             <Card className="border-2 shadow-sm">
                 <CardHeader className="bg-muted/30 border-b pb-4 flex flex-row items-center justify-between">
-                    <div className="flex items-center gap-3">
-                       
-                        <div>
-                            <div className="flex items-center gap-3">
-                                <CardTitle className="text-xl">Users</CardTitle>
-                                {hasPermission('create_admins') && (
-                                    <Button 
-                                        onClick={() => {
-                                            setFormData({ id: '', username: '', email: '', password: '', name: '', phone: '', roleIds: [], active: true });
-                                            setShowCreateDialog(true);
-                                        }} 
-                                        size="icon" 
-                                        variant="outline" 
-                                        className="h-7 w-7 rounded-full border-blue-500 text-blue-500 hover:bg-blue-50 bg-transparent shadow-none"
-                                        title="Create Admin"
-                                    >
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                )}
-                            </div>
-                            
-                        </div>
-                    </div>
+                    <CardTitle className="text-xl">Employees</CardTitle>
+                    {hasPermission('create_admins') && (
+                        <Button 
+                            onClick={() => {
+                                setFormData({ id: '', username: '', email: '', password: '', name: '', phone: '', roleIds: [], active: true, employeeCode: '', dateOfJoining: '', residentialAddress: '' });
+                                setShowCreateDialog(true);
+                            }} 
+                            variant="outline" 
+                            className="border-blue-500 text-blue-500 hover:bg-blue-50 bg-transparent shadow-sm px-3 py-1.5 h-auto text-sm flex items-center"
+                            title="Add Employee"
+                        >
+                            <Plus className="h-4 w-4 mr-1.5" />
+                            Add Employee
+                        </Button>
+                    )}
                 </CardHeader>
                 <CardContent className="pt-6">
                     {isLoading ? (
@@ -372,8 +419,10 @@ export default function AdminsPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>User</TableHead>
-                                        <TableHead>Email</TableHead>
+                                        <TableHead>Emp ID</TableHead>
+                                        <TableHead>User Details</TableHead>
+                                        <TableHead>Phone No</TableHead>
+                                        <TableHead>Email & Address</TableHead>
                                         <TableHead>Role</TableHead>
                                         <TableHead>Status</TableHead>
                                         {(hasPermission('edit_admins') || hasPermission('delete_admins')) && (
@@ -384,11 +433,33 @@ export default function AdminsPage() {
                                 <TableBody>
                                     {admins.map((admin) => (
                                         <TableRow key={admin.id} className={!admin.active ? 'opacity-70' : ''}>
-                                            <TableCell>
-                                                <div className="font-medium">{admin.name || admin.username}</div>
-                                                <div className="text-xs text-muted-foreground">@{admin.username}</div>
+                                            <TableCell className="font-semibold text-slate-800 text-xs">
+                                                {admin.employeeCode || <span className="text-muted-foreground">-</span>}
                                             </TableCell>
-                                            <TableCell>{admin.email}</TableCell>
+                                            <TableCell>
+                                                <div className="font-medium text-slate-900">{admin.name || admin.username}</div>
+                                                <div className="text-xs text-muted-foreground">@{admin.username}</div>
+                                                {admin.dateOfJoining && (
+                                                    <div className="text-[11px] text-slate-400 mt-0.5">
+                                                        Joined: {new Date(admin.dateOfJoining).toLocaleDateString('en-IN', {
+                                                            day: 'numeric',
+                                                            month: 'short',
+                                                            year: 'numeric'
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-xs font-medium text-slate-700">
+                                                {admin.employeePhone || admin.deliveryBoyPhone || <span className="text-muted-foreground">-</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-xs text-slate-700">{admin.email}</div>
+                                                {admin.residentialAddress && (
+                                                    <div className="text-[11px] text-slate-400 italic max-w-[200px] truncate mt-0.5" title={admin.residentialAddress}>
+                                                        {admin.residentialAddress}
+                                                    </div>
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 {admin.roles && admin.roles.length > 0 ? (
                                                     <div className="flex flex-wrap gap-1">
@@ -422,9 +493,12 @@ export default function AdminsPage() {
                                                                     email: admin.email,
                                                                     password: '',
                                                                     name: admin.name || '',
-                                                                    phone: admin.deliveryBoyPhone || '',
+                                                                    phone: (admin.employeePhone || admin.deliveryBoyPhone || '').replace(/^\+91/, ''),
                                                                     roleIds: admin.roles ? admin.roles.map(r => r.id) : [],
-                                                                    active: admin.active !== false
+                                                                    active: admin.active !== false,
+                                                                    employeeCode: admin.employeeCode || '',
+                                                                    dateOfJoining: admin.dateOfJoining ? new Date(admin.dateOfJoining).toISOString().split('T')[0] : '',
+                                                                    residentialAddress: admin.residentialAddress || ''
                                                                 });
                                                                 setShowCreateDialog(true);
                                                             }}>

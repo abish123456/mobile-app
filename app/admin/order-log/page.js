@@ -8,7 +8,7 @@ import {
   Search, Loader2, Package, User, Phone, MapPin, CreditCard,
   Clock, CheckCircle2, XCircle, AlertTriangle, Truck, Route,
   Link2, Wallet, RefreshCw, Calendar as CalendarIcon, IndianRupee, Info,
-  ChevronDown, ChevronUp, Hash, ChevronLeft, ChevronRight
+  ChevronDown, ChevronUp, Hash, ChevronLeft, ChevronRight, ShoppingCart, Edit3, MapPinIcon
 } from 'lucide-react';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
@@ -54,17 +54,19 @@ const PAYMENT_STATUS_COLORS = {
 };
 
 const EVENT_CONFIG = {
-  ORDER_PLACED:         { icon: Package,      color: 'bg-blue-500',   label: 'Order Placed' },
-  PAYMENT_INITIATED:    { icon: CreditCard,   color: 'bg-yellow-500', label: 'Payment Initiated' },
-  PAYMENT_SUCCESS:      { icon: CheckCircle2, color: 'bg-green-500',  label: 'Payment Confirmed' },
-  PAYMENT_FAILED:       { icon: XCircle,      color: 'bg-red-500',    label: 'Payment Failed' },
-  ROUTE_ASSIGNED:       { icon: Route,        color: 'bg-indigo-500', label: 'Route Assigned' },
-  ROUTE_LINK_GENERATED: { icon: Link2,        color: 'bg-purple-500', label: 'Route Link' },
-  DELIVERED:            { icon: CheckCircle2, color: 'bg-emerald-500',label: 'Delivered' },
-  NOT_DELIVERED:        { icon: AlertTriangle,color: 'bg-orange-500', label: 'Not Delivered' },
-  DEPOSIT_CREDITED:     { icon: Wallet,       color: 'bg-teal-500',   label: 'Deposit' },
-  DEPOSIT_DEBITED:      { icon: Wallet,       color: 'bg-amber-500',  label: 'Deposit' },
-  CANCELLED:            { icon: XCircle,      color: 'bg-red-600',    label: 'Cancelled' },
+  ORDER_PLACED: { icon: Package, color: 'bg-blue-500', label: 'Order Placed' },
+  PAYMENT_INITIATED: { icon: CreditCard, color: 'bg-yellow-500', label: 'Payment Initiated' },
+  PAYMENT_SUCCESS: { icon: CheckCircle2, color: 'bg-green-500', label: 'Payment Confirmed' },
+  PAYMENT_FAILED: { icon: XCircle, color: 'bg-red-500', label: 'Payment Failed' },
+  ROUTE_ASSIGNED: { icon: Route, color: 'bg-indigo-500', label: 'Route Assigned' },
+  ROUTE_LINK_GENERATED: { icon: Link2, color: 'bg-purple-500', label: 'Route Link' },
+  DELIVERED: { icon: CheckCircle2, color: 'bg-emerald-500', label: 'Delivered' },
+  NOT_DELIVERED: { icon: AlertTriangle, color: 'bg-orange-500', label: 'Not Delivered' },
+  DEPOSIT_CREDITED: { icon: Wallet, color: 'bg-teal-500', label: 'Deposit' },
+  DEPOSIT_DEBITED: { icon: Wallet, color: 'bg-amber-500', label: 'Deposit' },
+  CANCELLED: { icon: XCircle, color: 'bg-red-600', label: 'Cancelled' },
+  ITEMS_EDITED: { icon: ShoppingCart, color: 'bg-blue-600', label: 'Items Edited' },
+  ADDRESS_UPDATED: { icon: MapPin, color: 'bg-cyan-600', label: 'Address Updated' },
 };
 
 function TimelineEvent({ event, isLast }) {
@@ -139,14 +141,14 @@ function TimelineEvent({ event, isLast }) {
               if (['deliverySlot', 'newSlot', 'oldSlot', 'type', 'isQrPayment', 'fromRoute', 'toRoute'].includes(k)) return null;
               if (event.type === 'DELIVERED' && ['paymentMethod', 'paymentInstrument'].includes(k)) return null;
               if (event.type === 'REASSIGNED' && ['oldDeliveryBoy', 'newDeliveryBoy', 'reason'].includes(k)) return null;
-              
+
               let displayVal = typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v);
-// ...
-              
+              // ...
+
               if (['deliveryDate', 'expectedDeliveryDate', 'newDate', 'oldDate', 'newDeliveryDate', 'oldDeliveryDate'].includes(k)) {
-                try { displayVal = fmtDate(v); } catch {}
+                try { displayVal = fmtDate(v); } catch { }
               } else if (k.toLowerCase().includes('date') || k.toLowerCase().includes('at')) {
-                try { displayVal = fmtDateTime(v); } catch {}
+                try { displayVal = fmtDateTime(v); } catch { }
               }
               if (k === 'amount') displayVal = `₹${Number(v).toFixed(2)}`;
               let label = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
@@ -184,7 +186,7 @@ function OrderSummaryCard({ order }) {
     });
   } else {
     // Fallback if no items
-    const gstRate = 0.05; 
+    const gstRate = 0.05;
     subtotal = order.amount / (1 + gstRate);
     taxTotal = order.amount - subtotal;
   }
@@ -202,96 +204,96 @@ function OrderSummaryCard({ order }) {
           <p className="text-xs text-gray-400 mt-1 font-mono">Internal ID : {order.id}</p>
         </div>
       </CardHeader>
-      
+
       <CardContent className="pt-3 flex-1 flex flex-col overflow-y-auto custom-scrollbar-light">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
           {/* Left Column */}
           <div className="space-y-6">
             {/* Customer Information */}
-        <section className="space-y-2">
-          <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-700 uppercase tracking-widest">
-            <User className="h-4 w-4 text-blue-600" />
-            Customer Information
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6">
-            <div className="space-y-4">
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Customer ID:</p>
-                <p className="text-sm font-medium text-gray-700">{order.customer.internalId?.slice(-8).toUpperCase() || order.customer.id.slice(-8).toUpperCase()}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Order Date & Time
-                </p>
-                <p className="text-sm font-medium text-gray-700">{fmtDateTime(order.createdAt)}</p>
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Name:</p>
-              <p className="text-sm font-medium text-blue-600">{order.customer.name}</p>
-              <p className="text-sm font-medium text-blue-600">{order.customer.phone}</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Delivery Address */}
-          <section className="space-y-2">
-            <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-600 uppercase tracking-widest">
-              <MapPin className="h-4 w-4 text-blue-600" />
-              Delivery Address
-            </h3>
-            <div className="pl-6 space-y-3">
-              <div className="flex items-start gap-2">
-                <p className="text-sm  text-gray-800 flex-1">
-                  {order.address.line1}{order.address.line2 ? `, ${order.address.line2}` : ''}
-                </p>
-              </div>
-              <p className="text-sm font-medium text-gray-500">{order.address.area}, {order.address.city} - {order.address.pincode}</p>
-              {order.address.landmark && <p className="text-xs font-medium text-gray-400 italic">Landmark: {order.address.landmark}</p>}
-              <div className="pt-3 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 flex items-center gap-1">Contact Person:</p>
-                  <p className="text-sm font-medium text-gray-700">{order.address.contactName || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 flex items-center gap-1">Contact Number:</p>
-                  <p className="text-sm font-medium text-gray-700">{order.address.contactPhone || '—'}</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Delivery Information */}
-          <section className="space-y-2">
-            <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-600 uppercase tracking-widest">
-              <CalendarIcon className="h-4 w-4 text-blue-600" />
-              Delivery Information
-            </h3>
-            <div className="grid grid-cols-1 gap-y-4 pl-6">
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
-                  <Truck className="h-3 w-3" /> Delivery Date
-                </p>
-                <p className="text-sm font-medium text-gray-700">{fmtDate(order.deliveryDate)} (Expected)</p>
-              </div>
-              {order.deliveredAt && (
-                <div>
-                  <p className="text-[10px] text-green-600 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Delivered On
-                  </p>
-                  <p className="text-sm font-bold text-green-600">{fmtDateTime(order.deliveredAt)}</p>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Order Breakdown */}
             <section className="space-y-2">
-              <button 
+              <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-700 uppercase tracking-widest">
+                <User className="h-4 w-4 text-blue-600" />
+                Customer Information
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Customer ID:</p>
+                    <p className="text-sm font-medium text-gray-700">{order.customer.internalId?.slice(-8).toUpperCase() || order.customer.id.slice(-8).toUpperCase()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Order Date & Time
+                    </p>
+                    <p className="text-sm font-medium text-gray-700">{fmtDateTime(order.createdAt)}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">Name:</p>
+                  <p className="text-sm font-medium text-blue-600">{order.customer.name}</p>
+                  <p className="text-sm font-medium text-blue-600">{order.customer.phone}</p>
+                </div>
+              </div>
+            </section>
+
+            {/* Delivery Address */}
+            <section className="space-y-2">
+              <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-600 uppercase tracking-widest">
+                <MapPin className="h-4 w-4 text-blue-600" />
+                Delivery Address
+              </h3>
+              <div className="pl-6 space-y-3">
+                <div className="flex items-start gap-2">
+                  <p className="text-sm  text-gray-800 flex-1">
+                    {order.address.line1}{order.address.line2 ? `, ${order.address.line2}` : ''}
+                  </p>
+                </div>
+                <p className="text-sm font-medium text-gray-500">{order.address.area}, {order.address.city} - {order.address.pincode}</p>
+                {order.address.landmark && <p className="text-xs font-medium text-gray-400 italic">Landmark: {order.address.landmark}</p>}
+                <div className="pt-3 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 flex items-center gap-1">Contact Person:</p>
+                    <p className="text-sm font-medium text-gray-700">{order.address.contactName || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-1 flex items-center gap-1">Contact Number:</p>
+                    <p className="text-sm font-medium text-gray-700">{order.address.contactPhone || '—'}</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-6">
+            {/* Delivery Information */}
+            <section className="space-y-2">
+              <h3 className="text-[12px] font-bold flex items-center gap-2 text-black-600 uppercase tracking-widest">
+                <CalendarIcon className="h-4 w-4 text-blue-600" />
+                Delivery Information
+              </h3>
+              <div className="grid grid-cols-1 gap-y-4 pl-6">
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
+                    <Truck className="h-3 w-3" /> Delivery Date
+                  </p>
+                  <p className="text-sm font-medium text-gray-700">{fmtDate(order.deliveryDate)} (Expected)</p>
+                </div>
+                {order.deliveredAt && (
+                  <div>
+                    <p className="text-[10px] text-green-600 uppercase font-bold tracking-wider mb-1 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Delivered On
+                    </p>
+                    <p className="text-sm font-bold text-green-600">{fmtDateTime(order.deliveredAt)}</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Order Breakdown */}
+            <section className="space-y-2">
+              <button
                 onClick={() => {
                   const willShow = !showBreakdown;
                   setShowBreakdown(willShow);
@@ -359,7 +361,7 @@ function OrderSummaryCard({ order }) {
 
             {/* Empty Cans Info */}
             <section className="space-y-2">
-              <button 
+              <button
                 onClick={() => {
                   const willShow = !showEmptyCans;
                   setShowEmptyCans(willShow);
@@ -373,7 +375,7 @@ function OrderSummaryCard({ order }) {
                 </div>
                 {showEmptyCans ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
               </button>
-              
+
               {showEmptyCans && (
                 <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col">
                   {/* Top Side: Number */}
@@ -412,10 +414,10 @@ function OrderSummaryCard({ order }) {
           </div>
         </div>
       </CardContent>
-      
+
       <div className="px-6 py-1.5 bg-gray-50/50 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400">
         <span>Last Updated: {fmtDateTime(order.updatedAt)}</span>
-        
+
       </div>
     </Card>
   );
@@ -448,7 +450,7 @@ export default function OrderLogPage() {
         setSearchResults([]);
         setError('');
       }
-    }, 500); 
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchInput, selectedDate]);
@@ -480,7 +482,7 @@ export default function OrderLogPage() {
     if (!q && !date) return;
     setIsLoading(true);
     setError('');
-    
+
     // Only clear results if it's a fresh search (page 1)
     if (page === 1) {
       setSearchResults([]);
@@ -495,7 +497,7 @@ export default function OrderLogPage() {
 
       const searchRes = await adminFetch(`/api/admin/orders?${params.toString()}`);
       const searchData = await searchRes.json();
-      
+
       if (searchData.success && searchData.orders?.length > 0) {
         setSearchResults(searchData.orders);
         if (searchData.pagination) {
@@ -520,7 +522,7 @@ export default function OrderLogPage() {
     e?.preventDefault();
     const q = searchInput.trim();
     if (!q && !selectedDate) { toast.error('Enter search query or select a date'); return; }
-    
+
     setIsLoading(true);
     setError('');
     setLogData(null);
@@ -535,7 +537,7 @@ export default function OrderLogPage() {
 
       const searchRes = await adminFetch(`/api/admin/orders?${params.toString()}`);
       const searchData = await searchRes.json();
-      
+
       if (searchData.success && searchData.orders?.length > 0) {
         if (searchData.orders.length === 1 && !selectedDate && page === 1) {
           await fetchLog(searchData.orders[0].id);
@@ -559,13 +561,6 @@ export default function OrderLogPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-          Order Log
-        </h1>
-        <p className="text-gray-500 mt-1">Search by Customer Name, Phone, or Order Number to see processing history.</p>
-      </div>
-
       {/* Search */}
       <Card className="shadow-md border-2 border-blue-50">
         <CardContent className="pt-6">
@@ -581,7 +576,7 @@ export default function OrderLogPage() {
                 autoFocus
               />
             </div>
-            
+
             <div className="w-full md:w-64">
               <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
                 <PopoverTrigger asChild>
@@ -595,8 +590,8 @@ export default function OrderLogPage() {
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {selectedDate ? format(selectedDate, "PPP") : "Ordered Date"}
                     {selectedDate && (
-                      <span 
-                        className="ml-auto hover:text-red-500 p-1" 
+                      <span
+                        className="ml-auto hover:text-red-500 p-1"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedDate(null);
@@ -714,7 +709,7 @@ export default function OrderLogPage() {
                 </button>
               ))}
             </div>
-            
+
             {/* Pagination Controls */}
             {pagination.totalPages > 1 && (
               <div className="p-4 border-t border-gray-100 bg-gray-50/30 flex items-center justify-end gap-6">
@@ -753,16 +748,16 @@ export default function OrderLogPage() {
       {logData && !isLoading && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setLogData(null)}
               className="text-gray-500 hover:text-blue-600"
             >
               ← Back to Search
             </Button>
           </div>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <div className="lg:col-span-1 w-full">
               {/* Order Summary */}

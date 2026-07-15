@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
             SELECT 
                 r.*,
                 to_char(r."createdAt" AT TIME ZONE 'Asia/Kolkata' AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
+                to_char(r."sentAt" AT TIME ZONE 'Asia/Kolkata', 'DD Mon YYYY, hh:MI AM') as "sentAtFormatted",
                 c.name as "customerName",
                 c.phone as "customerPhone",
                 c."cansInHand" as "customerCansInHand"

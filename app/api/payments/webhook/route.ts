@@ -845,6 +845,99 @@ async function processWebhookEvent(event: any) {
       }
     }
 
+    // ─── RazorpayX Payout Webhooks (for deposit refunds) ───
+    // These events fire when a payout's status changes after the admin initiates a refund
+    if (event.event === "payout.processed") {
+      const payout = event.payload.payout.entity;
+      const payoutId = payout.id;
+      const utr = payout.utr || null;
+
+      console.log(`[Webhook] Payout processed: ${payoutId}, UTR: ${utr}`);
+
+      // Update the DepositRefundRequest with final status and UTR
+      try {
+        const updateRes = await query(
+          `UPDATE "DepositRefundRequest"
+           SET "status" = 'PAID',
+               "razorpayPayoutStatus" = 'processed',
+               "transactionId" = COALESCE($2, "transactionId"),
+               "updatedAt" = NOW()
+           WHERE "razorpayPayoutId" = $1`,
+          [payoutId, utr]
+        );
+
+        if (updateRes.rowCount && updateRes.rowCount > 0) {
+          console.log(`[Webhook] Updated DepositRefundRequest for payout ${payoutId} → processed (UTR: ${utr})`);
+        } else {
+          // Not a deposit refund payout — that's fine, ignore silently
+          console.log(`[Webhook] No matching DepositRefundRequest for payout ${payoutId}`);
+        }
+      } catch (dbError: any) {
+        console.error(`[Webhook] DB error updating payout ${payoutId}:`, dbError.message);
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (event.event === "payout.failed") {
+      const payout = event.payload.payout.entity;
+      const payoutId = payout.id;
+      const failureReason = payout.failure_reason || payout.status_details?.description || "Unknown reason";
+
+      console.error(`[Webhook] Payout FAILED: ${payoutId}, Reason: ${failureReason}`);
+
+      try {
+        // Update payout status to failed
+        const updateRes = await query(
+          `UPDATE "DepositRefundRequest"
+           SET "razorpayPayoutStatus" = 'failed',
+               "updatedAt" = NOW()
+           WHERE "razorpayPayoutId" = $1
+           RETURNING "id", "customerId", "amount"`,
+          [payoutId]
+        );
+
+        if (updateRes.rowCount && updateRes.rowCount > 0) {
+          const refundReq = updateRes.rows[0] as any;
+          console.error(`[Webhook] Payout failed for DepositRefundRequest ${refundReq.id}. Amount: ₹${refundReq.amount}. Reason: ${failureReason}`);
+          // Note: The money is still deducted from the customer's wallet.
+          // Admin should check the RazorpayX dashboard and retry manually.
+        }
+      } catch (dbError: any) {
+        console.error(`[Webhook] DB error updating failed payout ${payoutId}:`, dbError.message);
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (event.event === "payout.reversed") {
+      const payout = event.payload.payout.entity;
+      const payoutId = payout.id;
+
+      console.error(`[Webhook] Payout REVERSED: ${payoutId}`);
+
+      try {
+        // Update payout status to reversed
+        const updateRes = await query(
+          `UPDATE "DepositRefundRequest"
+           SET "razorpayPayoutStatus" = 'reversed',
+               "updatedAt" = NOW()
+           WHERE "razorpayPayoutId" = $1
+           RETURNING "id", "customerId", "amount"`,
+          [payoutId]
+        );
+
+        if (updateRes.rowCount && updateRes.rowCount > 0) {
+          const refundReq = updateRes.rows[0] as any;
+          console.error(`[Webhook] Payout reversed for DepositRefundRequest ${refundReq.id}. Amount: ₹${refundReq.amount}. Money returned to RazorpayX balance.`);
+        }
+      } catch (dbError: any) {
+        console.error(`[Webhook] DB error updating reversed payout ${payoutId}:`, dbError.message);
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Webhook processing error:", error);

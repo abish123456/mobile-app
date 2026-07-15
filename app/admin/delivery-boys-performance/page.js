@@ -167,7 +167,7 @@ export default function DeliveryBoysPerformancePage() {
 
   return (
     <div className="space-y-6 ">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-2">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <BarChart3 className="h-8 w-8" />
@@ -177,107 +177,104 @@ export default function DeliveryBoysPerformancePage() {
             Track delivery performance and statistics
           </p>
         </div>
-      </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Start Date</Label>
-              <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      'w-full justify-start text-left font-normal',
-                      !startDate && 'text-muted-foreground'
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <CalendarComponent
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        setStartDate(date);
-                        setIsStartDatePickerOpen(false);
-                      }
-                    }}
-                    disabled={(date) => date > new Date()}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label>End Date</Label>
-              <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      'w-full justify-start text-left font-normal',
-                      !endDate && 'text-muted-foreground'
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, 'PPP') : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <CalendarComponent
-                    mode="single"
-                    selected={endDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        setEndDate(date);
-                        setIsEndDatePickerOpen(false);
-                      }
-                    }}
-                    disabled={(date) => date > new Date()}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label>Delivery Staff</Label>
-              <Select value={selectedDeliveryBoyId} onValueChange={setSelectedDeliveryBoyId}>
-                <SelectTrigger className="w-full border-2 border-primary/20 bg-background shadow-sm hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10 hover:border-primary/40 hover:text-black transition-all">
-                  <SelectValue placeholder="All Delivery Staff" />
-                </SelectTrigger>
-                <SelectContent className="w-85">
-                  <SelectItem value="all">All Delivery Staff</SelectItem>
-                  {deliveryBoys.map((db) => (
-                    <SelectItem key={db.id} value={db.id}>
-                      {db.name} ({db.phone})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 flex items-end">
-              <Button
-                variant="outline"
-                onClick={resetFilters}
-                className="w-full"
-                disabled={!startDate && !endDate && selectedDeliveryBoyId === 'all'}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset Filters
-              </Button>
-            </div>
+        {/* Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 w-full lg:w-auto lg:min-w-[800px] items-end">
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-gray-500">Start Date</Label>
+            <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-full justify-start text-left font-normal bg-white border-gray-200 shadow-sm hover:bg-gray-50/50',
+                    !startDate && 'text-muted-foreground'
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 text-gray-400" />
+                  {startDate ? format(startDate, 'PPP') : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <CalendarComponent
+                  mode="single"
+                  selected={startDate}
+                  onSelect={(date) => {
+                    if (date) {
+                      setStartDate(date);
+                      setIsStartDatePickerOpen(false);
+                    }
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-gray-500">End Date</Label>
+            <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-full justify-start text-left font-normal bg-white border-gray-200 shadow-sm hover:bg-gray-50/50',
+                    !endDate && 'text-muted-foreground'
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 text-gray-400" />
+                  {endDate ? format(endDate, 'PPP') : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <CalendarComponent
+                  mode="single"
+                  selected={endDate}
+                  onSelect={(date) => {
+                    if (date) {
+                      setEndDate(date);
+                      setIsEndDatePickerOpen(false);
+                    }
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-gray-500">Delivery Staff</Label>
+            <Select value={selectedDeliveryBoyId} onValueChange={setSelectedDeliveryBoyId}>
+              <SelectTrigger className="w-full border border-gray-200 bg-white shadow-sm hover:bg-gray-50/50 transition-colors">
+                <SelectValue placeholder="All Delivery Staff" />
+              </SelectTrigger>
+              <SelectContent className="w-85">
+                <SelectItem value="all">All Delivery Staff</SelectItem>
+                {deliveryBoys.map((db) => (
+                  <SelectItem key={db.id} value={db.id}>
+                    {db.name} ({db.phone})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col justify-end">
+            <span className="text-xs invisible h-4 select-none mb-1">Reset</span>
+            <Button
+              variant="outline"
+              onClick={resetFilters}
+              className="w-full border border-gray-200 bg-white hover:bg-red-50 hover:text-red-600 transition-colors shadow-sm"
+              disabled={!startDate && !endDate && selectedDeliveryBoyId === 'all'}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reset Filters
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">

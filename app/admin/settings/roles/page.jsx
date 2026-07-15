@@ -50,6 +50,7 @@ const PERMISSION_GROUPS = [
                     { id: 'view_order_count', label: 'View Order Count' },
                     { id: 'cancel_order', label: 'Cancel Order' },
                     { id: 'edit_order_address', label: 'Edit Order Address' },
+                    { id: 'edit_order_items', label: 'Edit Order Items' },
                     { id: 'reschedule_order', label: 'Reschedule Order' },
                 ]
             },
@@ -206,6 +207,9 @@ const PERMISSION_GROUPS = [
                     { id: 'view_deposit_reports', label: 'View Deposit Reports' },
                     { id: 'export_deposit_reports', label: 'Export Deposit Reports' },
                     { id: 'view_deposit_reports_count', label: 'View Deposit Reports Count' },
+                    { id: 'view_order_wallet_reports', label: 'View Order Wallet Reports' },
+                    { id: 'export_order_wallet_reports', label: 'Export Order Wallet Reports' },
+                    { id: 'view_order_wallet_reports_count', label: 'View Order Wallet Reports Count' },
                 ]
             },
             {

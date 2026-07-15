@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
       onLeave: boolean;
       createdAt: Date;
       updatedAt: Date;
+      employeeCode: string | null;
+      email: string | null;
+      address: string | null;
       assignedRouteNames: string | null;
     }>(
       `SELECT 
@@ -30,8 +33,13 @@ export async function GET(req: NextRequest) {
         db."onLeave",
         db."createdAt",
         db."updatedAt",
+        e."employeeCode",
+        e."email",
+        e."address",
         (SELECT STRING_AGG(sr."name", ', ') FROM "ServiceRoute" sr WHERE sr."currentDeliveryBoyId" = db."id") as "assignedRouteNames"
       FROM "DeliveryBoy" db
+      LEFT JOIN "Admin" a ON db."adminId" = a.id
+      LEFT JOIN "Employee" e ON e."adminId" = a.id
       WHERE db."active" = true
       ORDER BY db."name" ASC`
     );

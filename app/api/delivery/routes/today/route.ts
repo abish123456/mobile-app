@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
           o."paymentStatus" as "orderPaymentStatus",
           o."paymentMethod" as "orderPaymentMethod",
           o."status" as "orderStatus",
+          o."codAdjustmentAmount" as "orderCodAdjustmentAmount",
           o."createdAt" as "orderCreatedAt",
           c."id" as "customerId",
           c."name" as "customerName",
@@ -257,6 +258,12 @@ export async function GET(req: NextRequest) {
 
           const totalDepositCans = depositRate > 0 ? Math.floor((row.depositWalletBalance || 0) / depositRate) : 0;
 
+          const codAdjustmentAmountPaise = row.orderCodAdjustmentAmount || 0;
+          const onlinePaidAmountRupees = Math.round(totalPaidInPaise / 100);
+          const codToCollectRupees = row.orderPaymentMethod === 'COD'
+            ? orderAmountInPaise / 100
+            : codAdjustmentAmountPaise / 100; // For ONLINE: only the extra COD portion
+
           return {
             id: row.orderId,
             orderNumber: row.orderNumber,
@@ -272,6 +279,9 @@ export async function GET(req: NextRequest) {
             paymentStatus: effectivePaymentStatus,
             paymentMethod: row.orderPaymentMethod,
             status: row.orderStatus,
+            codAdjustmentAmount: (row.orderCodAdjustmentAmount || 0) / 100,
+            onlinePaidAmount: onlinePaidAmountRupees,
+            codToCollect: codToCollectRupees,
             customer: {
               name: row.customerName,
               phone: row.customerPhone,

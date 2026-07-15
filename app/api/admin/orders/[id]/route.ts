@@ -67,11 +67,21 @@ export async function GET(
         o."paymentInstrument",
         o."isQrPayment",
         o."createdAt",
+        COALESCE(
+          (SELECT wt."amount"
+           FROM "WalletTransaction" wt
+           WHERE wt."referenceId" = o."id"
+             AND wt."walletType" = 'ORDER'
+             AND wt."type" = 'DEBIT'
+           LIMIT 1), 0
+        ) as "walletAmountApplied",
 
         o."updatedAt",
         o."customerId",
         c."name" as "customerName",
         c."phone" as "customerPhone",
+        c."cansInHand" as "customerCansInHand",
+        c."depositWalletBalance" as "customerDepositWalletBalance",
         a."line1" as "addressLine1",
         a."line2" as "addressLine2",
         a."contactName",
@@ -130,7 +140,7 @@ export async function GET(
     }
 
     const order = orderRes.rows[0];
-    const amountInRupees = order.amount ? order.amount / 100 : 0;
+    const amountInRupees = order.amount ? Math.round(order.amount / 100) : 0;
 
     // Determine actual payment method (UPI/Card)
     let actualPaymentMethod = order.paymentInstrument || order.paymentMethod; 
@@ -165,6 +175,31 @@ export async function GET(
       }
     }
 
+    const committedQtyRes = await query<{ committedOrdered: string, committedReturned: string }>(`
+      SELECT 
+        COALESCE(SUM(oi."quantity"), 0)::bigint as "committedOrdered",
+        COALESCE(SUM(oi."returnQuantity"), 0)::bigint as "committedReturned"
+      FROM "Order" o
+      LEFT JOIN "OrderItem" oi ON o."id" = oi."orderId"
+      JOIN "Product" p ON p."id" = oi."productId"
+      WHERE o."customerId" = $1 AND o."id" != $2
+        AND o."status" IN ('PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY')
+        AND (o."paymentMethod" = 'COD' OR o."paymentStatus" = 'SUCCESS')
+        AND p."depositAmount" > 0
+    `, [order.customerId, orderId]);
+    const committedOrdered = parseInt(committedQtyRes.rows[0]?.committedOrdered || '0', 10);
+    const committedReturned = parseInt(committedQtyRes.rows[0]?.committedReturned || '0', 10);
+
+    const committedDepositRes = await query<{ committedDeposit: string }>(`
+      SELECT COALESCE(SUM("depositAmount"), 0)::bigint as "committedDeposit"
+      FROM "Order" 
+      WHERE "customerId" = $1 AND "id" != $2
+        AND "status" NOT IN ('CANCELLED', 'NOT_DELIVERED')
+        AND "paymentStatus" != 'SUCCESS'
+        AND ("paymentMethod" = 'COD' OR "paymentStatus" = 'SUCCESS')
+    `, [order.customerId, orderId]);
+    const committedDeposit = (parseInt(committedDepositRes.rows[0]?.committedDeposit || '0', 10)) / 100;
+
     return NextResponse.json({
       success: true,
       order: {
@@ -177,35 +212,47 @@ export async function GET(
         deliverySlot: order.deliverySlot,
         status: order.status,
         paymentStatus: order.paymentStatus,
-        paymentMethod: actualPaymentMethod,
+        paymentMethod: Number(order.walletAmountApplied || 0) > 0
+          ? (amountInRupees === 0 ? 'WALLET' : `WALLET + ${actualPaymentMethod}`)
+          : actualPaymentMethod,
         bankRrn: bankRrn,
         upiId: upiId,
         payerContact: payerContact,
         paymentBreakdown: (() => {
-          if (order.additionalQuantity && order.additionalQuantity > 0 && order.originalQuantity) {
-            // Check if mixed payment
-            // Case 1: Original was ONLINE (implied by paymentMethod or providerPaymentId), Addition is COD (implied by lack of new payment link usage or simple convention)
-            // Since we don't store "Addition Payment Method" explicitly but know the flow:
-            // If original `paymentMethod` is ONLINE, and we have additional quantity with no second online payment record (which we don't support deeply yet), 
-            // and `paymentStatus` is SUCCESS (meaning it was collected manually), then it's split.
-            // Even simple rule: OriginalQty corresponds to `actualPaymentMethod`. AdditionalQty corresponds to COD (mostly).
-            // But if original was COD, then both are COD.
+          const walletAmountApplied = Number(order.walletAmountApplied || 0);
+          let parts = [];
+          if (walletAmountApplied > 0) {
+            parts.push(`Wallet: ₹${walletAmountApplied.toFixed(2)}`);
+          }
+          if (amountInRupees > 0 || walletAmountApplied === 0) {
+            parts.push(`${actualPaymentMethod}: ₹${amountInRupees.toFixed(2)}`);
+          }
+          const walletText = parts.join(' + ');
 
+          if (order.additionalQuantity && order.additionalQuantity > 0 && order.originalQuantity) {
             const originalMethod = actualPaymentMethod;
             const additionalMethod = 'COD'; // Currently mostly supports COD for additions or existing line
 
             if (originalMethod !== additionalMethod) {
-              return `${order.originalQuantity} cans ${originalMethod}, ${order.additionalQuantity} cans ${additionalMethod}`;
+              return `${order.originalQuantity} cans ${originalMethod}, ${order.additionalQuantity} cans ${additionalMethod}${walletAmountApplied > 0 ? ` (via ${walletText})` : ''}`;
             }
           }
-          return null; // No split display needed
+          return walletAmountApplied > 0 ? walletText : null; // No split display needed
         })(),
         createdAt: order.createdAt.toISOString(),
         amount: amountInRupees,
+        codAdjustmentAmount: (order.codAdjustmentAmount ? order.codAdjustmentAmount / 100 : 0),
+        onlinePaidAmount: order.paymentMethod === 'ONLINE' ? Math.max(0, amountInRupees - (order.codAdjustmentAmount ? order.codAdjustmentAmount / 100 : 0)) : 0,
+        walletAmountApplied: Number(order.walletAmountApplied || 0),
         customer: {
           id: order.customerId,
           name: order.customerName || "Unknown",
           phone: order.customerPhone,
+          cansInHand: order.customerCansInHand || 0,
+          depositWalletBalance: order.customerDepositWalletBalance ? Number(order.customerDepositWalletBalance) : 0,
+          committedOrdered,
+          committedReturned,
+          committedDeposit,
         },
         routeDate: order.routeDate ? order.routeDate.toISOString() : null,
         address: {
@@ -308,6 +355,10 @@ export async function PATCH(
       if (!(await verifyAdminAuthWithPermission(req, "edit_order_address"))) {
         return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
       }
+    } else if (action === 'EDIT_ITEMS') {
+      if (!(await verifyAdminAuthWithPermission(req, "edit_order_items"))) {
+        return NextResponse.json(getAdminPermissionErrorResponse(), { status: 403 });
+      }
     } else {
       return NextResponse.json(
         { success: false, message: "Invalid action" },
@@ -319,6 +370,8 @@ export async function PATCH(
     const orderCheck = await query<{
       status: string;
       paymentStatus: string;
+      paymentMethod: string;
+      amount: number;
       depositAmount: number;
       customerId: string;
       addressId: string;
@@ -326,19 +379,26 @@ export async function PATCH(
       pincode: string;
       routeToken: string | null;
       shiftStatus: string | null;
+      customerPhone: string;
+      orderNumber: string | null;
     }>(
       `SELECT 
         o."status", 
-        o."paymentStatus", 
+        o."paymentStatus",
+        o."paymentMethod",
+        o."amount",
         o."depositAmount", 
         o."customerId", 
         o."addressId", 
         o."deliveryDate", 
         a."pincode", 
         r."token" as "routeToken",
-        rs."status" as "shiftStatus"
+        rs."status" as "shiftStatus",
+        c."phone" as "customerPhone",
+        o."orderNumber"
        FROM "Order" o 
        INNER JOIN "Address" a ON o."addressId" = a."id"
+       INNER JOIN "Customer" c ON o."customerId" = c."id"
        LEFT JOIN "RouteOrder" ro ON o."id" = ro."orderId" AND ro."deliveryStatus" = 'PENDING'
        LEFT JOIN "Route" r ON ro."routeId" = r."id"
        LEFT JOIN "RouteShift" rs ON rs."routeId" = r."id"
@@ -353,7 +413,7 @@ export async function PATCH(
       );
     }
 
-    const { status: currentStatus, paymentStatus, depositAmount, customerId, addressId, deliveryDate, pincode: oldPincode, routeToken, shiftStatus } = orderCheck.rows[0];
+    const { status: currentStatus, paymentStatus, paymentMethod, amount: currentAmount, depositAmount, customerId, addressId, deliveryDate, pincode: oldPincode, routeToken, shiftStatus, customerPhone, orderNumber } = orderCheck.rows[0];
 
     if (currentStatus === 'DELIVERED' || currentStatus === 'CANCELLED') {
       return NextResponse.json(
@@ -362,12 +422,7 @@ export async function PATCH(
       );
     }
 
-    if (action === 'UPDATE_ADDRESS' && (routeToken || (shiftStatus && shiftStatus !== 'NOT_STARTED'))) {
-      return NextResponse.json(
-        { success: false, message: "Cannot update address after route link is generated or shift has started" },
-        { status: 400 }
-      );
-    }
+
 
     const { withTransaction } = await import("../../../../../lib/db");
 
@@ -406,18 +461,46 @@ export async function PATCH(
           // Log transaction (DEBIT)
           await client.query(
             `INSERT INTO "WalletTransaction"
-             ("id", "customerId", "amount", "type", "referenceType", "referenceId", "description", "createdAt")
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+             ("id", "customerId", "amount", "type", "walletType", "referenceType", "referenceId", "description", "createdAt")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
             [
               crypto.randomUUID(),
               customerId,
-              -depositInRupees, // Negative for DEBIT
+              -depositInRupees,
               'DEBIT',
+              'DEPOSIT',
               'ORDER_CANCELLED',
               orderId,
               `Deposit reversal for Cancelled Order #${orderId.slice(-8).toUpperCase()}`
             ]
           );
+        }
+
+        // 4. For ONLINE paid orders, credit product amount to Order Wallet
+        if (paymentStatus === 'SUCCESS' && paymentMethod === 'ONLINE') {
+          const productAmountPaise = Math.max(0, (currentAmount || 0) - (depositAmount || 0));
+          if (productAmountPaise > 0) {
+            const productAmountRupees = productAmountPaise / 100;
+            await client.query(
+              `UPDATE "Customer" SET "orderWalletBalance" = "orderWalletBalance" + $1, "updatedAt" = NOW() WHERE "id" = $2`,
+              [productAmountRupees, customerId]
+            );
+            await client.query(
+              `INSERT INTO "WalletTransaction"
+               ("id", "customerId", "amount", "type", "walletType", "referenceType", "referenceId", "description", "createdAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+              [
+                crypto.randomUUID(),
+                customerId,
+                productAmountRupees,
+                'CREDIT',
+                'ORDER',
+                'ORDER_CANCELLED',
+                orderId,
+                `Order Wallet credit for cancelled Online Order #${(orderNumber || orderId.slice(-8)).toUpperCase()}`
+              ]
+            );
+          }
         }
       });
 
@@ -619,6 +702,286 @@ export async function PATCH(
       return NextResponse.json({
         success: true,
         message: "Address updated successfully and route recalculated"
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // EDIT_ITEMS action
+    // ──────────────────────────────────────────────────────────────────────────
+    if (action === 'EDIT_ITEMS') {
+      const { items: newItems } = body as {
+        items: { productId: string; quantity: number; price: number; gst: number; depositAmount: number }[];
+      };
+
+      if (!Array.isArray(newItems) || newItems.length === 0) {
+        return NextResponse.json({ success: false, message: 'items array is required and cannot be empty' }, { status: 400 });
+      }
+
+      // Validate each item
+      for (const item of newItems) {
+        if (!item.productId || !item.quantity || item.quantity < 1) {
+          return NextResponse.json({ success: false, message: 'Each item must have a valid productId and quantity >= 1' }, { status: 400 });
+        }
+      }
+
+      // Fetch current items (old snapshot)
+      const oldItemsRes = await query<{
+        id: string; productId: string; productName: string; quantity: number; price: number; gst: number; depositAmount: number; returnQuantity: number;
+      }>(
+        `SELECT oi."id", oi."productId", p."name" as "productName", oi."quantity", oi."price", oi."gst", p."depositAmount", oi."returnQuantity"
+         FROM "OrderItem" oi
+         JOIN "Product" p ON oi."productId" = p."id"
+         WHERE oi."orderId" = $1`,
+        [orderId]
+      );
+      const oldItems = oldItemsRes.rows;
+
+      // Fetch product info for new items (for deposit amounts)
+      const productIds = newItems.map(i => i.productId);
+      const productRes = await query<{ id: string; name: string; depositAmount: number; gst: number; price: number; }>(
+        `SELECT "id", "name", "depositAmount", "gst", "price" FROM "Product" WHERE "id" = ANY($1::text[])`,
+        [productIds]
+      );
+      const productMap = new Map<string, { id: string; name: string; depositAmount: number; gst: number; price: number; }>(
+        productRes.rows.map(p => [p.id, p])
+      );
+
+      // Compute old amounts (paise)
+      const oldProductAmountPaise = oldItems.reduce((sum, item) => {
+        const lineTotal = item.price * item.quantity;
+        const gst = lineTotal * ((item.gst || 5) / 100);
+        return sum + Math.round((lineTotal + gst) * 100);
+      }, 0);
+      
+      // Use the ACTUAL deposit amount from the order, not a theoretical calculation
+      const oldDepositPaise = depositAmount ? Math.round(depositAmount) : 0;
+      const oldTotalPaise = oldProductAmountPaise + oldDepositPaise;
+
+      // Fetch customer and committed quantities first for empty cans swap check
+      const customerRes = await query(`SELECT "cansInHand" FROM "Customer" WHERE "id" = $1`, [customerId]);
+      const customer = customerRes.rows[0] || { cansInHand: 0 };
+
+      const committedQtyRes = await query<{ committedReturned: string }>(`
+        SELECT 
+          COALESCE(SUM(oi."returnQuantity"), 0)::bigint as "committedReturned"
+        FROM "Order" o
+        LEFT JOIN "OrderItem" oi ON o."id" = oi."orderId"
+        JOIN "Product" p ON p."id" = oi."productId"
+        WHERE o."customerId" = $1 AND o."id" != $2
+          AND o."status" IN ('PENDING', 'CONFIRMED', 'OUT_FOR_DELIVERY')
+          AND (o."paymentMethod" = 'COD' OR o."paymentStatus" = 'SUCCESS')
+          AND p."name" = 'Water Can 20L'
+      `, [customerId, orderId]);
+      const committedReturned = parseInt(committedQtyRes.rows[0]?.committedReturned || '0', 10);
+      let remainingAvailableCans = Math.max(0, customer.cansInHand - committedReturned);
+
+      // Compute new amounts (paise)
+      let newProductAmountPaise = 0;
+      let newDepositPaise = 0;
+      const enrichedNewItems: any[] = [];
+
+      for (const item of newItems) {
+        const product = productMap.get(item.productId);
+        if (!product) {
+          return NextResponse.json({ success: false, message: `Product ${item.productId} not found` }, { status: 400 });
+        }
+        
+        let retQty = 0;
+        if (product.name === 'Water Can 20L') {
+          retQty = Math.min(item.quantity, remainingAvailableCans);
+          remainingAvailableCans = Math.max(0, remainingAvailableCans - retQty);
+        }
+
+        // Deposit amount is calculated purely on a per-order basis:
+        // (quantity - returnQuantity) * product.depositAmount
+        const itemDepositPaise = Math.max(0, (item.quantity - retQty) * (product.depositAmount || 0) * 100);
+        newDepositPaise += Math.round(itemDepositPaise);
+
+        // Use the price from the request body (admin sets it, defaults to product price)
+        const unitPrice = item.price || product.price;
+        const gstRate = item.gst ?? product.gst ?? 5;
+        const depositPerUnit = product.depositAmount || 0;
+        const lineTotal = unitPrice * item.quantity;
+        const gstAmount = lineTotal * (gstRate / 100);
+        newProductAmountPaise += Math.round((lineTotal + gstAmount) * 100);
+        
+        enrichedNewItems.push({
+          productId: item.productId,
+          productName: product.name,
+          quantity: item.quantity,
+          returnQuantity: retQty,
+          price: unitPrice,
+          gst: gstRate,
+          depositAmount: depositPerUnit,
+        });
+      }
+
+      const newTotalPaise = newProductAmountPaise + newDepositPaise;
+      const amountDiff = newTotalPaise - oldTotalPaise; // positive = increase, negative = reduction
+      const depositDiff = newDepositPaise - oldDepositPaise;
+      const productAmountDiff = newProductAmountPaise - oldProductAmountPaise;
+
+      let codAmountAdded = 0;
+      let orderWalletCredit = 0;
+      let depositWalletCredit = 0;
+
+      const adminId = await getAdminIdFromRequest(req);
+
+      const { withTransaction } = await import("../../../../../lib/db");
+      const { sendPushNotification } = await import("../../../../../lib/push");
+
+      await withTransaction(async (client) => {
+        // 1. Delete old OrderItems
+        await client.query(`DELETE FROM "OrderItem" WHERE "orderId" = $1`, [orderId]);
+
+        // 2. Insert new OrderItems
+        for (const item of enrichedNewItems) {
+          await client.query(
+            `INSERT INTO "OrderItem" ("id", "orderId", "productId", "quantity", "returnQuantity", "price", "gst")
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [crypto.randomUUID(), orderId, item.productId, item.quantity, item.returnQuantity, item.price, item.gst]
+          );
+        }
+
+        // 3. Update Order amount, depositAmount, quantity
+        const newTotalQty = enrichedNewItems.reduce((s, i) => s + i.quantity, 0);
+        
+        // Fetch wallet amount applied at checkout (ORDER wallet type, referenceType = 'ORDER')
+        const walletRes = await client.query(
+          `SELECT SUM("amount") as "walletApplied" FROM "WalletTransaction" 
+           WHERE "referenceId" = $1 AND "walletType" = 'ORDER' AND "type" = 'DEBIT' AND "referenceType" = 'ORDER'`,
+          [orderId]
+        );
+        const walletAppliedPaise = Math.round((walletRes.rows[0]?.walletApplied || 0) * 100);
+        const newNetAmountPaise = Math.max(0, newTotalPaise - walletAppliedPaise);
+
+        await client.query(
+          `UPDATE "Order" SET "amount" = $1, "depositAmount" = $2, "quantity" = $3, "updatedAt" = NOW() WHERE "id" = $4`,
+          [newNetAmountPaise, newDepositPaise, newTotalQty, orderId]
+        );
+
+        // 4. Handle product amount reduction → Order Wallet
+        if (productAmountDiff < 0 && paymentStatus === 'SUCCESS') {
+          orderWalletCredit = Math.abs(productAmountDiff);
+          const creditRupees = orderWalletCredit / 100;
+          await client.query(
+            `UPDATE "Customer" SET "orderWalletBalance" = "orderWalletBalance" + $1, "updatedAt" = NOW() WHERE "id" = $2`,
+            [creditRupees, customerId]
+          );
+          await client.query(
+            `INSERT INTO "WalletTransaction" ("id", "customerId", "amount", "type", "walletType", "referenceType", "referenceId", "description", "createdAt")
+             VALUES ($1, $2, $3, 'CREDIT', 'ORDER', 'ORDER_EDIT', $4, $5, NOW())`,
+            [crypto.randomUUID(), customerId, creditRupees, orderId,
+             `Order Wallet credit: order items edited — reduced by ₹${creditRupees.toFixed(2)} (Order #${(orderNumber || orderId.slice(-8)).toUpperCase()})`]
+          );
+        }
+
+        // 5. Handle deposit reduction → Deposit Wallet
+        if (depositDiff < 0 && paymentStatus === 'SUCCESS') {
+          depositWalletCredit = Math.abs(depositDiff); // This is the refund amount
+          const depositCreditRupees = depositWalletCredit / 100;
+          
+          // Since they no longer need this deposit, we REDUCE the deposit wallet balance
+          await client.query(
+            `UPDATE "Customer" SET "depositWalletBalance" = "depositWalletBalance" - $1, "updatedAt" = NOW() WHERE "id" = $2`,
+            [depositCreditRupees, customerId]
+          );
+          await client.query(
+            `INSERT INTO "WalletTransaction" ("id", "customerId", "amount", "type", "walletType", "referenceType", "referenceId", "description", "createdAt")
+             VALUES ($1, $2, $3, 'DEBIT', 'DEPOSIT', 'ORDER_EDIT', $4, $5, NOW())`,
+            [crypto.randomUUID(), customerId, depositCreditRupees, orderId,
+             `Deposit Wallet adjustment: deposit reduced by ₹${depositCreditRupees.toFixed(2)} (Order #${(orderNumber || orderId.slice(-8)).toUpperCase()})`]
+          );
+          
+          // And we REFUND this amount to their Order Wallet so they can spend it
+          await client.query(
+            `UPDATE "Customer" SET "orderWalletBalance" = "orderWalletBalance" + $1, "updatedAt" = NOW() WHERE "id" = $2`,
+            [depositCreditRupees, customerId]
+          );
+          await client.query(
+            `INSERT INTO "WalletTransaction" ("id", "customerId", "amount", "type", "walletType", "referenceType", "referenceId", "description", "createdAt")
+             VALUES ($1, $2, $3, 'CREDIT', 'ORDER', 'ORDER_EDIT', $4, $5, NOW())`,
+            [crypto.randomUUID(), customerId, depositCreditRupees, orderId,
+             `Order Wallet credit: deposit refund of ₹${depositCreditRupees.toFixed(2)} (Order #${(orderNumber || orderId.slice(-8)).toUpperCase()})`]
+          );
+        }
+
+        // 6. Handle total amount increase → extra amount to collect (either COD or Online)
+        if (amountDiff > 0) {
+          codAmountAdded = amountDiff;
+          await client.query(
+            `UPDATE "Order" SET "codAdjustmentAmount" = COALESCE("codAdjustmentAmount", 0) + $1, "updatedAt" = NOW() WHERE "id" = $2`,
+            [codAmountAdded, orderId]
+          );
+        }
+
+        // 7. Insert OrderEditLog
+        await client.query(
+          `INSERT INTO "OrderEditLog" ("id", "orderId", "adminId", "editType", "oldSnapshot", "newSnapshot", "oldAmount", "newAmount", "amountDiff", "depositDiff", "codAmountAdded", "orderWalletCredit", "depositWalletCredit", "description", "createdAt")
+           VALUES ($1, $2, $3, 'ITEMS_EDITED', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())`,
+          [
+            crypto.randomUUID(), orderId, adminId,
+            JSON.stringify(oldItems), JSON.stringify(enrichedNewItems),
+            oldTotalPaise, newTotalPaise, amountDiff, depositDiff,
+            codAmountAdded, orderWalletCredit, depositWalletCredit,
+            `Admin edited order items. Amount changed from ₹${(oldTotalPaise/100).toFixed(2)} to ₹${(newTotalPaise/100).toFixed(2)}`
+          ]
+        );
+
+        // 8. Insert OrderActivityLog
+        await client.query(
+          `INSERT INTO "OrderActivityLog" ("id", "orderId", "action", "description", "metadata", "createdAt")
+           VALUES ($1, $2, 'ITEMS_EDITED', $3, $4, NOW())`,
+          [
+            crypto.randomUUID(), orderId,
+            `Items edited by admin. Old total: ₹${(oldTotalPaise/100).toFixed(2)}, New total: ₹${(newTotalPaise/100).toFixed(2)}${codAmountAdded > 0 ? `, Extra COD: ₹${(codAmountAdded/100).toFixed(2)}` : ''}${orderWalletCredit > 0 ? `, Order Wallet credited: ₹${(orderWalletCredit/100).toFixed(2)}` : ''}`,
+            JSON.stringify({ performedBy: adminId || 'ADMIN' })
+          ]
+        );
+      });
+
+      // 9. Audit log (async, outside transaction)
+      logAction({
+        actorId: adminId,
+        actorType: 'ADMIN',
+        entity: 'ORDER',
+        entityId: orderId,
+        action: 'ITEMS_EDITED',
+        oldData: { items: oldItems, amount: oldTotalPaise / 100 },
+        newData: { items: enrichedNewItems, amount: newTotalPaise / 100, codAdjustmentAdded: codAmountAdded / 100, orderWalletCredited: orderWalletCredit / 100, depositWalletCredited: depositWalletCredit / 100 },
+        description: `Admin edited order items. Amount: ₹${(oldTotalPaise/100).toFixed(2)} → ₹${(newTotalPaise/100).toFixed(2)}`,
+      });
+
+      // 10. Push notification to customer
+      try {
+        const sessionRes = await query<{ pushToken: string }>(
+          `SELECT "pushToken" FROM "UserSession" WHERE "customerId" = $1 AND "pushToken" IS NOT NULL ORDER BY "updatedAt" DESC LIMIT 1`,
+          [customerId]
+        );
+        const pushToken = sessionRes.rows[0]?.pushToken;
+        if (pushToken) {
+          const notifBody = codAmountAdded > 0
+            ? `Your order #${(orderNumber || orderId.slice(-8)).toUpperCase()} was updated. New total: ₹${(newTotalPaise/100).toFixed(0)}. Additional COD to pay: ₹${(codAmountAdded/100).toFixed(0)}.`
+            : orderWalletCredit > 0
+            ? `Your order #${(orderNumber || orderId.slice(-8)).toUpperCase()} was updated. ₹${(orderWalletCredit/100).toFixed(0)} credited to your Order Wallet.`
+            : `Your order #${(orderNumber || orderId.slice(-8)).toUpperCase()} items were updated by our team.`;
+          await sendPushNotification(pushToken, 'Order Updated', notifBody);
+        }
+      } catch (notifErr) {
+        console.error('Push notification failed (non-critical):', notifErr);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Order items updated successfully',
+        changes: {
+          oldAmount: oldTotalPaise / 100,
+          newAmount: newTotalPaise / 100,
+          amountDiff: amountDiff / 100,
+          codAmountAdded: codAmountAdded / 100,
+          orderWalletCredited: orderWalletCredit / 100,
+          depositWalletCredited: depositWalletCredit / 100,
+        }
       });
     }
 

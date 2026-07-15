@@ -20,13 +20,73 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Automatically cancel and refund any previous pending unpaid online orders older than 5 minutes
+    const pendingUnpaidRes = await query<{ id: string; walletAmountApplied: number }>(
+      `SELECT o."id",
+              COALESCE(
+                (SELECT wt."amount"
+                 FROM "WalletTransaction" wt
+                 WHERE wt."referenceId" = o."id"
+                   AND wt."walletType" = 'ORDER'
+                   AND wt."type" = 'DEBIT'
+                 LIMIT 1), 0
+              ) as "walletAmountApplied"
+       FROM "Order" o
+       WHERE o."customerId" = $1
+         AND o."status" = 'PENDING'
+         AND o."paymentMethod" = 'ONLINE'
+         AND o."paymentStatus" = 'PENDING'
+         AND o."createdAt" < NOW() - INTERVAL '5 minutes'`,
+      [customerId]
+    );
+
+    for (const pendingOrder of pendingUnpaidRes.rows) {
+      await withTransaction(async (client) => {
+        // Mark order as CANCELLED
+        await client.query(
+          `UPDATE "Order" 
+           SET "status" = 'CANCELLED', 
+               "paymentStatus" = 'FAILED', 
+               "updatedAt" = NOW() 
+           WHERE "id" = $1`,
+          [pendingOrder.id]
+        );
+
+        if (pendingOrder.walletAmountApplied > 0) {
+          // Refund wallet balance
+          await client.query(
+            `UPDATE "Customer" 
+             SET "orderWalletBalance" = "orderWalletBalance" + $1, 
+                 "updatedAt" = NOW() 
+             WHERE "id" = $2`,
+            [pendingOrder.walletAmountApplied, customerId]
+          );
+
+          // Log transaction
+          await client.query(
+            `INSERT INTO "WalletTransaction"
+               ("id", "customerId", "amount", "type", "walletType", "referenceType", "referenceId", "description", "createdAt")
+             VALUES ($1, $2, $3, 'CREDIT', 'ORDER', 'REFUND', $4, $5, NOW())`,
+            [
+              crypto.randomUUID(),
+              customerId,
+              pendingOrder.walletAmountApplied,
+              pendingOrder.id,
+              `Refund for abandoned unpaid Order #${pendingOrder.id.slice(-8).toUpperCase()}`
+            ]
+          );
+        }
+      });
+    }
+
     const customerRes = await query<{
       id: string;
       name: string | null;
       depositWalletBalance: number;
+      orderWalletBalance: number;
       cansInHand: number;
     }>(
-      `SELECT "id", "name", "depositWalletBalance", "cansInHand"
+      `SELECT "id", "name", "depositWalletBalance", "orderWalletBalance", "cansInHand"
        FROM "Customer"
        WHERE "id" = $1`,
       [customerId],
@@ -61,14 +121,14 @@ export async function GET(req: NextRequest) {
     const pendingOrdered = Number(pendingOrdersRes.rows[0]?.quantity) || 0;
     const pendingReturned = Number(pendingOrdersRes.rows[0]?.returnQuantity) || 0;
 
-    // Calculate pending deposit (amount already committed in active but unpaid orders)
+    // Calculate pending deposit (deposit already committed in COD orders that are active but not yet delivered)
+    // We only count COD orders because PAID orders' deposits go directly into the depositWalletBalance.
     const pendingDepositRes = await query<{ pendingDeposit: string }>(
       `SELECT COALESCE(SUM("depositAmount"), 0)::bigint as "pendingDeposit"
        FROM "Order"
        WHERE "customerId" = $1
-         AND "status" NOT IN ('CANCELLED', 'NOT_DELIVERED')
-         AND "paymentStatus" != 'SUCCESS'
-         AND ("paymentMethod" = 'COD' OR "paymentStatus" = 'SUCCESS')`,
+         AND "status" NOT IN ('CANCELLED', 'NOT_DELIVERED', 'DELIVERED')
+         AND "paymentMethod" = 'COD'`,
       [customer.id]
     );
     const pendingDeposit = (Number(pendingDepositRes.rows[0]?.pendingDeposit) || 0) / 100; // to Rupees
@@ -243,6 +303,7 @@ export async function GET(req: NextRequest) {
       id: customer.id, // Customer ID for admin reference
       name: customer.name || "",
       depositWalletBalance: customer.depositWalletBalance || 0,
+      orderWalletBalance: customer.orderWalletBalance || 0,
       cansInHand: customer.cansInHand || 0, // RAW DB value
       pendingOrdered: pendingOrdered,
       pendingReturned: pendingReturned,

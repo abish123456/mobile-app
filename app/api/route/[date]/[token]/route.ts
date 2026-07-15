@@ -106,6 +106,7 @@ export async function GET(
         o."paymentStatus" as "orderPaymentStatus",
         o."paymentMethod" as "orderPaymentMethod",
         o."status" as "orderStatus",
+        o."codAdjustmentAmount" as "orderCodAdjustmentAmount",
         o."createdAt" as "orderCreatedAt",
         c."id" as "customerId",
         c."name" as "customerName",
@@ -275,7 +276,7 @@ export async function GET(
           .filter(p => p.method === 'COD' && p.routeOrderId === row.routeOrderId)
           .reduce((sum, p) => sum + p.amount, 0);
 
-        const outstandingAmountInPaise = Math.max(0, orderAmountInPaise - totalPaidInPaise);
+        const outstandingAmountInPaise = row.orderPaymentStatus === 'SUCCESS' ? Number(row.orderCodAdjustmentAmount || 0) : Math.max(0, orderAmountInPaise - totalPaidInPaise);
 
         let effectivePaymentStatus = row.orderPaymentStatus;
         if (row.orderAdditionalQuantity && row.orderAdditionalQuantity > 0 && row.orderPaymentStatus !== 'SUCCESS') {

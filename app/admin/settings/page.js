@@ -210,10 +210,10 @@ export default function SettingsPage() {
 
     return (
         <div className="space-y-6 w-full animate-in fade-in duration-500">
-            <div className="flex flex-col gap-1">
+            {/* <div className="flex flex-col gap-1">
                 <h1 className="text-lg md:text-3xl font-extrabold tracking-tight text-foreground">Delivery Settings</h1>
                 <p className="text-muted-foreground text-lg">Manage weekly off days, holidays and delivery schedule</p>
-            </div>
+            </div> */}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                 

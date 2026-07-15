@@ -26,6 +26,39 @@ import {
   AlertDialogTrigger,
 } from '../ui/alert-dialog';
 
+const ROUTE_TITLES = {
+  '/admin': 'Dashboard',
+  '/admin/orders': 'Orders',
+  '/admin/routes': 'Assign Routes and Deliveries',
+  '/admin/service-routes': 'Routes Master',
+  '/admin/service-areas': 'Service Areas Master',
+  '/admin/products': 'Products Master',
+  '/admin/delivery-boys': 'Delivery Staffs Master',
+  '/admin/employees': 'Employee Master',
+  '/admin/not-delivered-reasons': 'Delivery Reasons Master',
+  '/admin/delivery-exceptions': 'Delivery Exceptions',
+  '/admin/order-log': 'Order Log',
+  '/admin/customer-prices': 'Customer Profiles',
+  '/admin/deposit-refunds': 'Deposit Refunds',
+  '/admin/delivery-boys-performance': 'Performance',
+  '/admin/reports': 'General Reports',
+  '/admin/reports/order-amount': 'Order Amount Reports',
+  '/admin/reports/cumulative': 'Cumulative Reports',
+  '/admin/reports/cod-collection': 'COD Collection Reports',
+  '/admin/reports/reassigned': 'Reassigned Orders Reports',
+  '/admin/reports/route-wise': 'Route-wise Reports',
+  '/admin/reports/cash-settlement': 'Cash Settlement Reports',
+  '/admin/reports/deposit': 'Deposit Reports',
+  '/admin/reports/order-wallet': 'Order Wallet Reports',
+  '/admin/reports/product-sales': 'Product Sales Reports',
+  '/admin/reports/attendance': 'Attendance Reports',
+  '/admin/settings/team': 'Team Settings',
+  '/admin/audit-logs': 'Audit Logs',
+  '/admin/settings': 'Delivery Settings',
+  '/admin/settings/contacts': 'Support Contacts',
+  '/admin/settings/locations': 'Attendance Locations',
+};
+
 export default function AdminHeader() {
   const router = useRouter();
   const pathname = usePathname();
@@ -51,15 +84,22 @@ export default function AdminHeader() {
 
   // Get page title based on current route
   const getPageTitle = () => {
-    if (pathname && pathname.startsWith('/admin') && pathname !== '/admin/login') {
-      // If it's the dashboard home, just show Dashboard
-      if (pathname === '/admin') {
-        return 'Dashboard';
-      }
-      // For other pages, we'll show their Role Name as requested
-      return adminRoleNames || 'Admin';
+    if (!pathname) return 'Dashboard';
+    const cleanPath = pathname.replace(/\/$/, '');
+
+    // Check exact matches
+    if (ROUTE_TITLES[cleanPath]) {
+      return ROUTE_TITLES[cleanPath];
     }
-    return 'Dashboard';
+
+    // Check prefix matches for nested routes
+    for (const [route, title] of Object.entries(ROUTE_TITLES)) {
+      if (route !== '/admin' && cleanPath.startsWith(route)) {
+        return title;
+      }
+    }
+
+    return adminRoleNames || 'Admin';
   };
 
   return (
@@ -67,7 +107,7 @@ export default function AdminHeader() {
       className="sticky top-0 z-40 w-full border-b bg-white/90 backdrop-blur"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      <div className="flex h-[4.25rem] items-center justify-between px-4 sm:px-6 lg:px-8 gap-3">
+      <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:px-8 gap-3">
         {/* Left: Mobile toggle + Page Title */}
         <div className="flex items-center gap-3 min-w-0">
           <SidebarTrigger className="xl:hidden -ml-1" aria-label="Toggle menu" />

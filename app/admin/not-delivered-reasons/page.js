@@ -172,21 +172,22 @@ export default function NotDeliveredReasonsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Not Delivered Reasons</h1>
-          <p className="text-muted-foreground">Manage the list of reasons delivery staff can choose from</p>
-        </div>
-        {hasPermission('create_not_delivered_reasons') && (
-          <Button onClick={handleAdd}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Reason
-          </Button>
-        )}
-      </div>
-
+    <div className="space-y-4">
       <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-4">
+          <div className="space-y-1">
+            <CardTitle>Reasons List</CardTitle>
+            <CardDescription>
+              Manage the list of reasons delivery staff can choose from
+            </CardDescription>
+          </div>
+          {hasPermission('create_not_delivered_reasons') && (
+            <Button onClick={handleAdd}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Reason
+            </Button>
+          )}
+        </CardHeader>
         <CardContent className="pt-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -236,13 +237,13 @@ export default function NotDeliveredReasonsPage() {
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             {hasPermission('edit_not_delivered_reasons') && (
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}>
-                                <Edit className="h-4 w-4" />
+                              <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(r)}>
+                                <Edit className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {hasPermission('delete_not_delivered_reasons') && (
-                              <Button variant="ghost" size="icon" onClick={() => handleDelete(r)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                              <Button variant="ghost" size="icon-xs" onClick={() => handleDelete(r)}>
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
                               </Button>
                             )}
                           </div>

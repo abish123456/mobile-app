@@ -33,6 +33,7 @@ import {
   MapPin,
   CreditCard,
   ShoppingBag,
+  ShoppingCart,
   History,
   LogOut,
   ChevronRight,
@@ -180,8 +181,8 @@ function ProfileContent() {
       setRefundDialogError("UPI ID is required");
       return;
     }
-    if (refundBankDetails.type === 'account' && (!refundBankDetails.accountNumber || !refundBankDetails.ifscCode)) {
-      setRefundDialogError("Account Number and IFSC Code are required");
+    if (refundBankDetails.type === 'account' && (!refundBankDetails.accountNumber || !refundBankDetails.ifscCode || !refundBankDetails.bankName || !refundBankDetails.accountHolderName)) {
+      setRefundDialogError("Account Number, IFSC Code, Bank Name, and Account Holder Name are required");
       return;
     }
 
@@ -251,6 +252,7 @@ function ProfileContent() {
             contactName: data.profile.contactName || '',
             contactPhone: data.profile.contactPhone || '',
             depositWalletBalance: data.profile.depositWalletBalance || 0,
+            orderWalletBalance: data.profile.orderWalletBalance || 0,
             cansInHand: data.profile.cansInHand || 0,
             totalCansCount: data.profile.totalCansCount || 0,
             pendingOrdered: data.profile.pendingOrdered || 0,
@@ -945,6 +947,22 @@ function ProfileContent() {
                       </div>
                     </div>
 
+                    {/* Order Wallet Card - only shown when balance > 0 */}
+                    {(formData.orderWalletBalance || 0) > 0 && (
+                      <div className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 shrink-0">
+                          <ShoppingCart className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-2xl font-black text-green-700">₹{Math.ceil(formData.orderWalletBalance || 0)}</p>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Order Wallet Balance</p>
+                        </div>
+                        <div className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded-lg font-medium">
+                          Used at next order
+                        </div>
+                      </div>
+                    )}
+
                     {/* Menu Options */}
                     <div className="bg-card rounded-2xl border border-border/50 overflow-hidden shadow-sm">
                       <div
@@ -1388,21 +1406,22 @@ function ProfileContent() {
                   onChange={() => setRefundBankDetails(prev => ({ ...prev, type: 'account' }))}
                 /> Bank Account
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+              {/* <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="refundType"
                   checked={refundBankDetails.type === 'cod'}
                   onChange={() => setRefundBankDetails(prev => ({ ...prev, type: 'cod' }))}
                 /> Cash
-              </label>
+              </label> */}
             </div>
 
-            {refundBankDetails.type === 'cod' ? (
+            {/* {refundBankDetails.type === 'cod' ? (
               <div className="bg-blue-50 p-3 rounded-md text-sm text-blue-700">
                 You will receive cash refund from the delivery partner at the time of collection.
               </div>
-            ) : refundBankDetails.type === 'upi' ? (
+            ) : */}
+            {refundBankDetails.type === 'upi' ? (
               <div>
                 <Label className="text-xs">UPI ID</Label>
                 <Input
@@ -1428,10 +1447,19 @@ function ProfileContent() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <Label className="text-xs">Bank Name</Label>
+                  <Label className="text-xs">Bank Name *</Label>
                   <Input
+                    placeholder="e.g. HDFC Bank"
                     value={refundBankDetails.bankName}
                     onChange={(e) => setRefundBankDetails(prev => ({ ...prev, bankName: e.target.value }))}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Account Holder Name *</Label>
+                  <Input
+                    placeholder="e.g. John Doe"
+                    value={refundBankDetails.accountHolderName}
+                    onChange={(e) => setRefundBankDetails(prev => ({ ...prev, accountHolderName: e.target.value }))}
                   />
                 </div>
               </div>

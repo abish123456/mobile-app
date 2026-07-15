@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent } from '../../../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { Label } from '../../../../components/ui/label';
 import { Calendar } from '../../../../components/ui/calendar';
@@ -137,7 +137,7 @@ export default function CODCollectionReportsPage() {
       reportData.forEach(item => {
         totalAmt += item.collectedAmount || 0;
       });
-      
+
       const totalRow = ['Grand Total', '', totalAmt];
       excelData.push(totalRow);
 
@@ -162,13 +162,13 @@ export default function CODCollectionReportsPage() {
           };
 
           if (R === 0) {
-             ws[cell_ref].s.font = { bold: true, sz: 14 };
-             ws[cell_ref].s.alignment = { horizontal: "center" };
-             ws[cell_ref].s.fill = { fgColor: { rgb: "E0E0E0" } };
+            ws[cell_ref].s.font = { bold: true, sz: 14 };
+            ws[cell_ref].s.alignment = { horizontal: "center" };
+            ws[cell_ref].s.fill = { fgColor: { rgb: "E0E0E0" } };
           }
           if (R === 1) {
-             ws[cell_ref].s.font = { bold: true, sz: 11 };
-             ws[cell_ref].s.alignment = { horizontal: "center" };
+            ws[cell_ref].s.font = { bold: true, sz: 11 };
+            ws[cell_ref].s.alignment = { horizontal: "center" };
           }
           if (R === 3) {
             ws[cell_ref].s.font = { bold: true };
@@ -190,11 +190,11 @@ export default function CODCollectionReportsPage() {
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'COD Collection');
-      
+
       const formattedStartDate = format(startDate, 'dd-MM-yyyy');
       const formattedEndDate = format(endDate, 'dd-MM-yyyy');
       const fileName = `COD_Collection_Report(${formattedStartDate}_to_${formattedEndDate}).xlsx`;
-      
+
       XLSX.writeFile(wb, fileName);
       toast.success('Excel Downloaded');
     } catch (err) {
@@ -204,88 +204,91 @@ export default function CODCollectionReportsPage() {
   };
 
   return (
-    <div className="space-y-6 w-full">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-            COD Collection Reports
-          </h1>
-          <p className="text-gray-500 mt-1">Route-wise cash collected for delivered orders</p>
-        </div>
-        {!isLoading && reportData.length > 0 && hasPermission('export_cod_collection_reports') && (
-          <Button onClick={downloadExcel} className="bg-green-600 hover:bg-green-700 shadow-sm transition-all hover:scale-[1.02]">
-            <FileDown className="h-4 w-4 mr-2" /> Download Excel
-          </Button>
-        )}
-      </div>
+    <div className="space-y-6 w-full pb-10">
+      <Card className="border border-slate-200 shadow-sm bg-white">
+        <CardHeader className="border-b flex flex-col lg:flex-row lg:items-center justify-between gap-4 py-4 print:hidden">
+          <CardTitle className="text-lg font-semibold text-slate-800 shrink-0">COD Collection</CardTitle>
 
-      <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Start Delivered Date</Label>
-              <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200", !startDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={startDate} onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }} initialFocus />
-                </PopoverContent>
-              </Popover>
+          {/* Filters & Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Start Date */}
+              <div className="relative w-full sm:w-44">
+                <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !startDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{startDate ? format(startDate, "dd-MM-yyyy") : <span>Start Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={startDate} onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* End Date */}
+              <div className="relative w-full sm:w-44">
+                <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !endDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{endDate ? format(endDate, "dd-MM-yyyy") : <span>End Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={endDate} onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Route */}
+              <div className="relative w-full sm:w-44">
+                <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
+                  <SelectTrigger className="w-full text-xs h-9 bg-white border-slate-200 shadow-sm">
+                    <SelectValue placeholder="All Routes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Routes</SelectItem>
+                    {routes.map(route => (
+                      <SelectItem key={route.id} value={route.id}>{route.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">End Delivered Date</Label>
-              <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200", !endDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
+            {/* Reset Filters */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetFilters}
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 text-xs h-9 shrink-0 px-3"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
+            </Button>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Select Route</Label>
-              <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
-                <SelectTrigger className="w-full h-11 border-gray-200">
-                  <SelectValue placeholder="All Routes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Routes</SelectItem>
-                  {routes.map(route => (
-                    <SelectItem key={route.id} value={route.id}>{route.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Actions</Label>
-              <Button onClick={handleResetFilters} variant="outline" className="h-11 w-full px-4 text-gray-500 hover:text-primary transition-colors border-gray-200">
-                <RotateCcw className="h-4 w-4 mr-2" /> Reset
+            {/* Export button */}
+            {!isLoading && reportData.length > 0 && hasPermission('export_cod_collection_reports') && (
+              <Button
+                onClick={downloadExcel}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 shadow-sm text-white h-9 text-xs gap-1.5 shrink-0"
+              >
+                <FileDown className="h-4 w-4" /> Download Excel
               </Button>
-            </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
-
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
-          <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-          <p className="text-gray-500 font-medium">Calculating report data...</p>
-        </div>
-      ) : (
-        <section className="space-y-4">
-          <div className="rounded-xl border border-gray-100 shadow-sm overflow-hidden bg-white w-full">
-            <Table>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white">
+              <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+              <p className="text-gray-500 text-sm font-medium">Calculating report data...</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
               <TableHeader className="bg-gray-50/80">
                 <TableRow>
                   <TableHead className="text-center font-bold text-gray-900 w-[150px] min-w-[150px]">Delivered Date</TableHead>
@@ -380,8 +383,9 @@ export default function CODCollectionReportsPage() {
               </div>
             )}
           </div>
-        </section>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

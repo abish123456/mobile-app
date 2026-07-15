@@ -239,172 +239,167 @@ export default function ServiceRoutesPage() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold">Routes</h1>
-                    <p className="text-muted-foreground">Manage routes</p>
-                </div>
+        <div className="space-y-4">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                    <div>
+                        <CardTitle>Routes</CardTitle>
+                        <CardDescription>
+                            Manage your delivery territories and pincode groupings.
+                        </CardDescription>
+                    </div>
 
-                <div className="flex items-center gap-2">
-                    {hasPermission('create_routes') && (
-                        <Button onClick={() => handleOpenDialog(null)}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create Route
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {hasPermission('create_routes') && (
+                            <Button onClick={() => handleOpenDialog(null)}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Route
+                            </Button>
+                        )}
 
-                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                        <DialogContent className="max-w-lg">
-                            <DialogHeader>
-                                <DialogTitle>
-                                    {selectedRoute ? 'Edit Route' : 'Create New Route'}
-                                </DialogTitle>
-                                <DialogDescription>
-                                    {selectedRoute ? 'Update route details and pincodes' : 'Define a new route endpoint'}
-                                </DialogDescription>
-                            </DialogHeader>
-                            <form onSubmit={handleSubmit}>
-                                <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="name">Route Name *</Label>
-                                        <Input
-                                            id="name"
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            placeholder="e.g. North Zone"
-                                            required
-                                            disabled={isSubmitting}
-                                        />
-                                    </div>
+                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                            <DialogContent className="max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle>
+                                        {selectedRoute ? 'Edit Route' : 'Create New Route'}
+                                    </DialogTitle>
+                                    <DialogDescription>
+                                        {selectedRoute ? 'Update route details and pincodes' : 'Define a new route endpoint'}
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <form onSubmit={handleSubmit}>
+                                    <div className="space-y-4 py-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="name">Route Name *</Label>
+                                            <Input
+                                                id="name"
+                                                value={formData.name}
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                placeholder="e.g. North Zone"
+                                                required
+                                                disabled={isSubmitting}
+                                            />
+                                        </div>
 
-                                    <div className="space-y-2">
-                                        <Label htmlFor="description">Description</Label>
-                                        <Input
-                                            id="description"
-                                            value={formData.description}
-                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                            placeholder="Optional description"
-                                            disabled={isSubmitting}
-                                        />
-                                    </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="description">Description</Label>
+                                            <Input
+                                                id="description"
+                                                value={formData.description}
+                                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                                placeholder="Optional description"
+                                                disabled={isSubmitting}
+                                            />
+                                        </div>
 
-                                    <div className="space-y-2">
-                                        <Label>Assigned Pincodes</Label>
-                                        <div className="space-y-3">
-                                            <Popover open={isPostalCodePopoverOpen} onOpenChange={setIsPostalCodePopoverOpen}>
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="outline" className="w-full justify-between font-normal">
-                                                        {formData.assignedPincodes.length > 0 ? `${formData.assignedPincodes.length} selected` : "Select pincodes..."}
-                                                        <Plus className="ml-2 h-4 w-4 opacity-50" />
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-[400px] p-0" align="start">
-                                                    <div className="flex items-center border-b px-3 py-2">
-                                                        <Search className="mr-2 h-4 w-4 opacity-50" />
-                                                        <input className="flex h-9 w-full bg-transparent outline-none" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                                                    </div>
-                                                    <div
-                                                        className="max-h-[300px] overflow-y-auto p-1"
-                                                        onWheel={(e) => e.stopPropagation()}
-                                                    >
-                                                        {activeServiceAreas.filter(a => a.pincode.includes(searchTerm) || a.areaName.toLowerCase().includes(searchTerm.toLowerCase())).map(area => {
-                                                            const isAssignedToOther = area.serviceRouteId && area.serviceRouteId !== selectedRoute?.id;
-                                                            const isSelected = formData.assignedPincodes.includes(area.pincode);
+                                        <div className="space-y-2">
+                                            <Label>Assigned Pincodes</Label>
+                                            <div className="space-y-3">
+                                                <Popover open={isPostalCodePopoverOpen} onOpenChange={setIsPostalCodePopoverOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="outline" className="w-full justify-between font-normal">
+                                                            {formData.assignedPincodes.length > 0 ? `${formData.assignedPincodes.length} selected` : "Select pincodes..."}
+                                                            <Plus className="ml-2 h-4 w-4 opacity-50" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-[400px] p-0" align="start">
+                                                        <div className="flex items-center border-b px-3 py-2">
+                                                            <Search className="mr-2 h-4 w-4 opacity-50" />
+                                                            <input className="flex h-9 w-full bg-transparent outline-none" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                                        </div>
+                                                        <div
+                                                            className="max-h-[300px] overflow-y-auto p-1"
+                                                            onWheel={(e) => e.stopPropagation()}
+                                                        >
+                                                            {activeServiceAreas.filter(a => a.pincode.includes(searchTerm) || a.areaName.toLowerCase().includes(searchTerm.toLowerCase())).map(area => {
+                                                                const isAssignedToOther = area.serviceRouteId && area.serviceRouteId !== selectedRoute?.id;
+                                                                const isSelected = formData.assignedPincodes.includes(area.pincode);
 
-                                                            return (
-                                                                <div
-                                                                    key={area.id}
-                                                                    className={cn(
-                                                                        "flex select-none items-center rounded-sm px-2 py-1.5 text-sm transition-colors",
-                                                                        isAssignedToOther ? "opacity-50 cursor-not-allowed bg-muted/30" : "cursor-pointer hover:bg-accent"
-                                                                    )}
-                                                                    onClick={() => {
-                                                                        if (isAssignedToOther) return;
-                                                                        const exists = formData.assignedPincodes.includes(area.pincode);
-                                                                        const newPins = exists
-                                                                            ? formData.assignedPincodes.filter(p => p !== area.pincode)
-                                                                            : [...formData.assignedPincodes, area.pincode];
-                                                                        setFormData({ ...formData, assignedPincodes: newPins });
-                                                                    }}
-                                                                >
-                                                                    <div className={cn(
-                                                                        "mr-2 flex h-4 w-4 items-center justify-center border rounded-sm transition-colors",
-                                                                        isSelected ? "bg-primary border-primary text-white" : "border-muted-foreground/30",
-                                                                        isAssignedToOther && "bg-muted"
-                                                                    )}>
-                                                                        {isSelected && <Check className="h-3 w-3" />}
-                                                                    </div>
-                                                                    <div className="flex flex-col">
-                                                                        <span>{area.pincode} - {area.areaName}</span>
-                                                                        {isAssignedToOther && (
-                                                                            <span className="text-[10px] text-destructive font-medium">
-                                                                                Assigned to: {area.serviceRouteName || 'Another Route'}
-                                                                            </span>
+                                                                return (
+                                                                    <div
+                                                                        key={area.id}
+                                                                        className={cn(
+                                                                            "flex select-none items-center rounded-sm px-2 py-1.5 text-sm transition-colors",
+                                                                            isAssignedToOther ? "opacity-50 cursor-not-allowed bg-muted/30" : "cursor-pointer hover:bg-accent"
                                                                         )}
+                                                                        onClick={() => {
+                                                                            if (isAssignedToOther) return;
+                                                                            const exists = formData.assignedPincodes.includes(area.pincode);
+                                                                            const newPins = exists
+                                                                                ? formData.assignedPincodes.filter(p => p !== area.pincode)
+                                                                                : [...formData.assignedPincodes, area.pincode];
+                                                                            setFormData({ ...formData, assignedPincodes: newPins });
+                                                                        }}
+                                                                    >
+                                                                        <div className={cn(
+                                                                            "mr-2 flex h-4 w-4 items-center justify-center border rounded-sm transition-colors",
+                                                                            isSelected ? "bg-primary border-primary text-white" : "border-muted-foreground/30",
+                                                                            isAssignedToOther && "bg-muted"
+                                                                        )}>
+                                                                            {isSelected && <Check className="h-3 w-3" />}
+                                                                        </div>
+                                                                        <div className="flex flex-col">
+                                                                            <span>{area.pincode} - {area.areaName}</span>
+                                                                            {isAssignedToOther && (
+                                                                                <span className="text-[10px] text-destructive font-medium">
+                                                                                    Assigned to: {area.serviceRouteName || 'Another Route'}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <div className="flex items-center justify-between border-t p-2 bg-gray-50">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => setFormData({ ...formData, assignedPincodes: [] })}
-                                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2"
-                                                        >
-                                                            Clear All
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => setIsPostalCodePopoverOpen(false)}
-                                                            className="h-8 px-4"
-                                                        >
-                                                            Done
-                                                        </Button>
-                                                    </div>
-                                                </PopoverContent>
-                                            </Popover>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="flex items-center justify-between border-t p-2 bg-gray-50">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => setFormData({ ...formData, assignedPincodes: [] })}
+                                                                className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 px-2"
+                                                            >
+                                                                Clear All
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => setIsPostalCodePopoverOpen(false)}
+                                                                className="h-8 px-4"
+                                                            >
+                                                                Done
+                                                            </Button>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
 
-                                            <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md bg-muted/20">
-                                                {formData.assignedPincodes.length === 0 ? (
-                                                    <span className="text-sm text-muted-foreground py-1 px-2">No pincodes selected</span>
-                                                ) : (
-                                                    formData.assignedPincodes.map((pincode) => {
-                                                        const area = activeServiceAreas.find(a => a.pincode === pincode);
-                                                        return (
-                                                            <Badge key={pincode} variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1 group">
-                                                                {pincode} {area ? `- ${area.areaName}` : ''}
-                                                                <button type="button" className="ml-1 rounded-full hover:bg-muted-foreground/20" onClick={() => {
-                                                                    setFormData({ ...formData, assignedPincodes: formData.assignedPincodes.filter(p => p !== pincode) });
-                                                                }}>
-                                                                    <X className="h-3 w-3" />
-                                                                </button>
-                                                            </Badge>
-                                                        );
-                                                    })
-                                                )}
+                                                <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md bg-muted/20">
+                                                    {formData.assignedPincodes.length === 0 ? (
+                                                        <span className="text-sm text-muted-foreground py-1 px-2">No pincodes selected</span>
+                                                    ) : (
+                                                        formData.assignedPincodes.map((pincode) => {
+                                                            const area = activeServiceAreas.find(a => a.pincode === pincode);
+                                                            return (
+                                                                <Badge key={pincode} variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1 group">
+                                                                    {pincode} {area ? `- ${area.areaName}` : ''}
+                                                                    <button type="button" className="ml-1 rounded-full hover:bg-muted-foreground/20" onClick={() => {
+                                                                        setFormData({ ...formData, assignedPincodes: formData.assignedPincodes.filter(p => p !== pincode) });
+                                                                    }}>
+                                                                        <X className="h-3 w-3" />
+                                                                    </button>
+                                                                </Badge>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                                <DialogFooter>
-                                    <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={isSubmitting}>Cancel</Button>
-                                    <Button type="submit" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 custom-spin" /> : (selectedRoute ? 'Update' : 'Create')}</Button>
-                                </DialogFooter>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-            </div>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Routes</CardTitle>
-                    <CardDescription>
-                        Manage your delivery territories and pincode groupings.
-                    </CardDescription>
+                                    <DialogFooter>
+                                        <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={isSubmitting}>Cancel</Button>
+                                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 custom-spin" /> : (selectedRoute ? 'Update' : 'Create')}</Button>
+                                    </DialogFooter>
+                                </form>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {(isLoading && serviceRoutes.length === 0) ? (
@@ -464,17 +459,17 @@ export default function ServiceRoutesPage() {
                                                     {hasPermission('edit_routes') && (
                                                         <Button
                                                             variant="ghost"
-                                                            size="icon"
+                                                            size="icon-xs"
                                                             onClick={() => handleOpenDialog(route)}
                                                             title="Edit Route"
                                                         >
-                                                            <Edit className="h-4 w-4" />
+                                                            <Edit className="h-3.5 w-3.5" />
                                                         </Button>
                                                     )}
                                                     {hasPermission('delete_routes') && (
                                                         <Button
                                                             variant="ghost"
-                                                            size="icon"
+                                                            size="icon-xs"
                                                             className="text-destructive hover:text-black"
                                                             onClick={() => {
                                                                 setSelectedRoute(route);
@@ -482,7 +477,7 @@ export default function ServiceRoutesPage() {
                                                             }}
                                                             title="Delete Route"
                                                         >
-                                                            <Trash2 className="h-4 w-4" />
+                                                            <Trash2 className="h-3.5 w-3.5" />
                                                         </Button>
                                                     )}
                                                 </div>

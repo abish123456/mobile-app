@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx-js-style';
 import { format, subMonths } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
@@ -146,7 +147,7 @@ export default function DepositReportPage() {
 
     try {
       const headers = activeTab === 'snapshot' 
-        ? ['Customer ID', 'Customer Name', 'Phone', 'Cans in Hand', 'Deposit Balance']
+        ? ['Customer ID', 'Customer Name', 'Phone', 'Deposit Balance']
         : ['Date', 'Time', 'Order Number', 'Customer ID', 'Customer Name', 'Phone', 'Payment Type', 'Amount'];
 
       const excelData = [
@@ -158,11 +159,10 @@ export default function DepositReportPage() {
           c.id ? c.id.slice(-8).toUpperCase() : 'N/A',
           c.name || 'N/A',
           c.phone || 'N/A',
-          c.cansInHand || 0,
           c.depositWalletBalance || 0
         ]) : filteredData.map(tx => [
-          tx.createdAt ? format(new Date(tx.createdAt), 'yyyy-MM-dd') : 'N/A',
-          tx.createdAt ? format(new Date(tx.createdAt), 'hh:mm a') : 'N/A',
+          tx.createdAtISTDateOnly || (tx.createdAt ? formatInTimeZone(new Date(tx.createdAt), 'Asia/Kolkata', 'yyyy-MM-dd') : 'N/A'),
+          tx.createdAtISTTimeOnly || (tx.createdAt ? formatInTimeZone(new Date(tx.createdAt), 'Asia/Kolkata', 'hh:mm a') : 'N/A'),
           tx.orderNumber || '-',
           tx.customerId ? tx.customerId.slice(-8).toUpperCase() : 'N/A',
           tx.name || 'N/A',
@@ -192,7 +192,6 @@ export default function DepositReportPage() {
         { wch: 15 }, // Customer ID
         { wch: 30 }, // Customer Name
         { wch: 20 }, // Phone
-        { wch: 15 }, // Cans in Hand
         { wch: 20 }  // Deposit Balance
       ] : [
         { wch: 15 }, // Date
@@ -219,23 +218,105 @@ export default function DepositReportPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Deposit Report</h1>
-          <p className="text-gray-500">View overall customer deposits and cans in hand</p>
-        </div>
-        {!isLoading && filteredData.length > 0 && (
-          <Button onClick={handleDownloadExcel} className="bg-green-600 hover:bg-green-700 shadow-sm transition-all hover:scale-[1.02]">
-            <FileDown className="h-4 w-4 mr-2" /> Download Excel
-          </Button>
-        )}
-      </div>
-
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid w-full sm:w-[400px] grid-cols-2 mb-6">
-          <TabsTrigger value="snapshot">Overview</TabsTrigger>
-          <TabsTrigger value="history">Deposit History</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+          <TabsList className="grid w-full lg:w-[320px] grid-cols-2 bg-slate-100 p-1 shrink-0">
+            <TabsTrigger value="snapshot" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-md">Overview</TabsTrigger>
+            <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-md">Deposit History</TabsTrigger>
+          </TabsList>
+
+          {/* Right Aligned Filters & Actions */}
+          <div className="w-full lg:w-auto">
+            {activeTab === 'snapshot' && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto justify-end">
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search by ID, name, or phone..."
+                    className="pl-9 h-9 text-xs bg-white border-gray-200 shadow-sm"
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                  />
+                </div>
+                {!isLoading && filteredData.length > 0 && (
+                  <Button onClick={handleDownloadExcel} size="sm" className="bg-green-600 hover:bg-green-700 shadow-sm transition-all h-9 text-xs shrink-0">
+                    <FileDown className="h-4 w-4 mr-1.5" /> Download Excel
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'history' && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto justify-end">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+                  {/* Start Date */}
+                  <div className="relative w-full sm:w-36">
+                    <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !startDate && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{startDate ? format(startDate, "dd-MM-yyyy") : <span>Start Date</span>}</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={startDate} onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }} initialFocus />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* End Date */}
+                  <div className="relative w-full sm:w-36">
+                    <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !endDate && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{endDate ? format(endDate, "dd-MM-yyyy") : <span>End Date</span>}</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={endDate} onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }} initialFocus />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Payment Type */}
+                  <div className="relative w-full sm:w-36">
+                    <Select value={paymentTypeFilter} onValueChange={setPaymentTypeFilter}>
+                      <SelectTrigger className="w-full text-xs h-9 bg-white border-slate-200 shadow-sm">
+                        <SelectValue placeholder="Payment Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All Payments</SelectItem>
+                        <SelectItem value="ONLINE">Online</SelectItem>
+                        <SelectItem value="COD">COD</SelectItem>
+                        <SelectItem value="QR Payment">QR Payment</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Search */}
+                  <div className="relative w-full sm:w-48">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
+                    <Input
+                      type="text"
+                      placeholder="Search..."
+                      className="pl-8 h-9 text-xs bg-white border-gray-200 shadow-sm"
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                    />
+                  </div>
+                </div>
+
+                {!isLoading && filteredData.length > 0 && (
+                  <Button onClick={handleDownloadExcel} size="sm" className="bg-green-600 hover:bg-green-700 shadow-sm transition-all h-9 text-xs shrink-0">
+                    <FileDown className="h-4 w-4 mr-1.5" /> Download Excel
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
       {error ? (
         <div className="bg-red-50 text-red-500 p-4 rounded-md border border-red-200">
@@ -252,19 +333,7 @@ export default function DepositReportPage() {
           <TabsContent value="snapshot" className="m-0">
             <Card>
             <CardHeader className="border-b">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <CardTitle>Customer Breakdown</CardTitle>
-                <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search by ID, name, or phone..."
-                    className="pl-9"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
+              <CardTitle>Customer Breakdown</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -274,14 +343,13 @@ export default function DepositReportPage() {
                       <TableHead className="w-[150px] min-w-[150px] pl-6">Customer ID</TableHead>
                       <TableHead className="w-[250px] min-w-[250px]">Customer</TableHead>
                       <TableHead className="w-[150px] min-w-[150px]">Phone</TableHead>
-                      <TableHead className="w-[150px] min-w-[150px] text-center">Cans in Hand</TableHead>
-                      <TableHead className="w-[150px] min-w-[150px] text-right">Deposit Balance</TableHead>
+                      <TableHead className="w-[150px] min-w-[150px] text-right pr-6">Deposit Balance</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center text-gray-500">
+                        <TableCell colSpan={4} className="h-24 text-center text-gray-500">
                           {searchQuery ? 'No customers match your search.' : 'No deposit records found.'}
                         </TableCell>
                       </TableRow>
@@ -291,12 +359,7 @@ export default function DepositReportPage() {
                           <TableCell className="font-mono text-sm pl-6 text-gray-600">{customer.id ? customer.id.slice(-8).toUpperCase() : 'N/A'}</TableCell>
                           <TableCell className="font-medium">{customer.name || 'N/A'}</TableCell>
                           <TableCell>{customer.phone}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={customer.cansInHand > 0 ? "secondary" : "outline"} className="font-mono">
-                              {customer.cansInHand || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="text-right font-medium pr-6">
                             ₹{customer.depositWalletBalance || 0}
                           </TableCell>
                         </TableRow>
@@ -362,70 +425,6 @@ export default function DepositReportPage() {
         </TabsContent>
 
         <TabsContent value="history" className="m-0 space-y-6">
-          <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</Label>
-                  <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200", !startDate && "text-muted-foreground")}>
-                        <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                        {startDate ? format(startDate, "dd-MM-yyyy") : <span>Start Date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={startDate} onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }} initialFocus />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</Label>
-                  <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200", !endDate && "text-muted-foreground")}>
-                        <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                        {endDate ? format(endDate, "dd-MM-yyyy") : <span>End Date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={endDate} onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }} initialFocus />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Payment Type</Label>
-                  <Select value={paymentTypeFilter} onValueChange={setPaymentTypeFilter}>
-                    <SelectTrigger className="w-full h-11 border-gray-200">
-                      <SelectValue placeholder="Payment Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Payments</SelectItem>
-                      <SelectItem value="ONLINE">Online</SelectItem>
-                      <SelectItem value="COD">COD</SelectItem>
-                      <SelectItem value="QR Payment">QR Payment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Search</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-3.5 h-4 w-4 text-gray-400" />
-                    <Input
-                      type="text"
-                      placeholder="Search by ID, name, or phone..."
-                      className="pl-9 h-11 border-gray-200"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           <Card>
             <CardHeader className="border-b">
@@ -443,7 +442,7 @@ export default function DepositReportPage() {
                       <TableHead className="w-[150px] min-w-[150px]">Customer ID</TableHead>
                       <TableHead className="w-[250px] min-w-[250px]">Customer</TableHead>
                       <TableHead className="w-[150px] min-w-[150px]">Payment Type</TableHead>
-                      <TableHead className="w-[150px] min-w-[150px]">Amount</TableHead>
+                      <TableHead className="w-[150px] min-w-[150px] text-right pr-6">Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -460,8 +459,8 @@ export default function DepositReportPage() {
                         <TableRow key={`${tx.transactionId}-${index}`}>
                           <TableCell className="font-medium pl-6">
                             <div className="flex flex-col">
-                              <span>{tx.createdAt ? format(new Date(tx.createdAt), 'MMM dd, yyyy') : 'N/A'}</span>
-                              <span className="text-xs text-muted-foreground">{tx.createdAt ? format(new Date(tx.createdAt), 'hh:mm a') : ''}</span>
+                              <span>{tx.createdAtISTDateOnly || (tx.createdAt ? formatInTimeZone(new Date(tx.createdAt), 'Asia/Kolkata', 'MMM dd, yyyy') : 'N/A')}</span>
+                              <span className="text-xs text-muted-foreground">{tx.createdAtISTTimeOnly || (tx.createdAt ? formatInTimeZone(new Date(tx.createdAt), 'Asia/Kolkata', 'hh:mm a') : '')}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">
@@ -483,8 +482,8 @@ export default function DepositReportPage() {
                                </Badge>
                             ) : '-'}
                           </TableCell>
-                          <TableCell className="font-medium text-green-600">
-                            + ₹{tx.amount || 0}
+                          <TableCell className="text-right font-medium pr-6">
+                            ₹{tx.amount || 0}
                           </TableCell>
                         </TableRow>
                       ))

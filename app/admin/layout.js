@@ -6,6 +6,7 @@ import AdminSidebar from '../../components/admin/AdminSidebar';
 import AdminHeader from '../../components/admin/AdminHeader';
 import { SidebarProvider } from '../../components/ui/sidebar';
 import { adminFetch } from '../../lib/admin-api';
+import stedaxisLogo from '../../public/stedaxis_logo.png';
 
 export default function AdminLayout({ children }) {
   const router = useRouter();
@@ -94,11 +95,14 @@ export default function AdminLayout({ children }) {
         <AdminSidebar />
         <div className="flex-1 flex flex-col w-full min-w-0">
           <AdminHeader />
-          <main className="flex-1 w-full p-6 bg-gray-50">
+          <main className="flex-1 w-full p-4 md:p-5 bg-gray-50">
             {children}
           </main>
-          <footer className="py-4 px-6 text-center text-gray-500 text-sm border-t border-gray-200">
-            Powered by <a href="https://www.stedaxis.com" target="_blank" rel="noopener noreferrer" className="font-medium">STEDAXIS</a>
+          <footer className="py-4 px-6 text-center text-gray-500 text-sm border-t border-gray-200 flex items-center justify-center gap-1">
+            <span>Powered by</span>
+            <a href="https://www.stedaxis.com" target="_blank" rel="noopener noreferrer" className="font-medium inline-flex items-center">
+              <img src={stedaxisLogo.src} alt="STEDAXIS" className="h-3 w-auto" />
+            </a>
           </footer>
         </div>
       </div>

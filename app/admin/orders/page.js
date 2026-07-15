@@ -28,7 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/
 import { Alert, AlertDescription } from '../../../components/ui/alert';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
-import { CalendarIcon, Package, Loader2, AlertCircle, Filter, RefreshCw, RotateCcw, User, Phone, MapPin, Calendar, CreditCard, Clock, Search, ChevronLeft, ChevronRight, Reply, ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
+import { CalendarIcon, Package, Loader2, AlertCircle, Filter, RefreshCw, RotateCcw, User, Phone, MapPin, Calendar, CreditCard, Clock, Search, ChevronLeft, ChevronRight, Reply, ChevronDown, ChevronUp, Pencil, Trash2, Plus, ShoppingCart, Wallet } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import {
   Tooltip,
@@ -111,6 +111,14 @@ export default function AdminOrdersPage() {
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState(null);
+
+  // Edit Items state
+  const [showEditItemsDialog, setShowEditItemsDialog] = useState(false);
+  const [isSavingItems, setIsSavingItems] = useState(false);
+  const [orderToEditItems, setOrderToEditItems] = useState(null);
+  const [editableItems, setEditableItems] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [editItemsSummary, setEditItemsSummary] = useState(null);
 
   // Edit Address state
   const [showEditAddressDialog, setShowEditAddressDialog] = useState(false);
@@ -195,6 +203,18 @@ export default function AdminOrdersPage() {
       }
     } catch (err) {
       console.error('Error fetching config:', err);
+    }
+  };
+
+  const fetchAllProducts = async () => {
+    try {
+      const res = await adminFetch('/api/admin/products?active=true&limit=100');
+      const data = await res.json();
+      if (data.success && data.products) {
+        setAllProducts(data.products);
+      }
+    } catch (err) {
+      console.error('Error fetching products:', err);
     }
   };
 
@@ -525,6 +545,103 @@ export default function AdminOrdersPage() {
     setShowEditAddressDialog(true);
   };
 
+  const openEditItemsDialog = (order) => {
+    setOrderToEditItems(order);
+    // Populate editable items from current order items
+    const items = (order.items || []).map(item => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      price: item.price,
+      gst: item.gst || 5,
+      depositAmount: item.depositAmount || 0,
+    }));
+    setEditableItems(items);
+    setEditItemsSummary(null);
+    fetchAllProducts();
+    setShowEditItemsDialog(true);
+  };
+
+  const computeEditSummary = (items) => {
+    const order = orderToEditItems;
+    if (!order) return null;
+    const newProductTotal = items.reduce((s, i) => {
+      const lineTotal = i.price * i.quantity;
+      const gst = lineTotal * ((i.gst || 5) / 100);
+      return s + lineTotal + gst;
+    }, 0);
+
+    // Calculate deposit dynamically on a per-order basis with empty cans swap check
+    const customer = order.customer || { cansInHand: 0, committedReturned: 0 };
+    let remainingAvailableCans = Math.max(0, (customer.cansInHand || 0) - (customer.committedReturned || 0));
+    let newDepositTotal = 0;
+
+    items.forEach(item => {
+      let retQty = 0;
+      if (item.productName === 'Water Can 20L') {
+        retQty = Math.min(item.quantity, remainingAvailableCans);
+        remainingAvailableCans = Math.max(0, remainingAvailableCans - retQty);
+      }
+
+      const itemDeposit = Math.max(0, (item.quantity - retQty) * (item.depositAmount || 0));
+      newDepositTotal += itemDeposit;
+    });
+
+    const newTotal = newProductTotal + newDepositTotal;
+    const oldTotal = order.amount || 0;
+    const diff = newTotal - oldTotal;
+    const isCOD = order.paymentMethod === 'COD';
+    const isOnline = order.paymentMethod === 'ONLINE' || order.paymentStatus === 'SUCCESS';
+    return { newProductTotal, newDepositTotal, newTotal, oldTotal, diff, isCOD, isOnline };
+  };
+
+  const handleSaveEditItems = async () => {
+    if (!orderToEditItems || editableItems.length === 0) return;
+    // Validate
+    for (const item of editableItems) {
+      if (!item.productId || item.quantity < 1) {
+        toast.error('Each item must have a product and quantity >= 1');
+        return;
+      }
+    }
+    setIsSavingItems(true);
+    try {
+      const response = await adminFetch(`/api/admin/orders/${orderToEditItems.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'EDIT_ITEMS',
+          items: editableItems.map(i => ({
+            productId: i.productId,
+            quantity: parseInt(i.quantity),
+            price: parseFloat(i.price),
+            gst: parseFloat(i.gst || 5),
+            depositAmount: parseFloat(i.depositAmount || 0),
+          }))
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        const ch = data.changes;
+        let msg = `Order items updated! New total: ₹${Math.round(ch.newAmount)}`;
+        if (ch.codAmountAdded > 0) msg += ` | Extra COD: ₹${Math.round(ch.codAmountAdded)}`;
+        if (ch.orderWalletCredited > 0) msg += ` | Order Wallet credited: ₹${Math.round(ch.orderWalletCredited)}`;
+        if (ch.depositWalletCredited > 0) msg += ` | Deposit Wallet credited: ₹${Math.round(ch.depositWalletCredited)}`;
+        toast.success(msg);
+        setShowEditItemsDialog(false);
+        setShowOrderDialog(false);
+        fetchOrders();
+      } else {
+        toast.error(data.message || 'Failed to update order items');
+      }
+    } catch (err) {
+      console.error('Error saving order items:', err);
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsSavingItems(false);
+    }
+  };
+
   const handleUpdateAddress = async () => {
     if (!orderToEditAddress) return;
 
@@ -587,42 +704,48 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Orders & Deliveries</h1>
-          <p className="text-muted-foreground">View and manage all orders & deliveries</p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
-          <div className="relative flex-grow sm:flex-grow-0">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search Order ID, Name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 w-full sm:w-[250px]"
-            />
-          </div>
-          {/* <Button onClick={() => setShowCleanupDialog(true)} variant="destructive" size="sm" disabled={isLoading || isCleaningUp} className="w-full sm:w-auto">
-            <Trash2 className={cn("h-4 w-4 mr-2", isCleaningUp && "animate-spin")} />
-            Cleanup Abandoned
-          </Button> */}
-          <Button onClick={fetchOrders} variant="outline" size="sm" disabled={isLoading} className="w-full sm:w-auto">
-            <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
-            Refresh
-          </Button>
-        </div>
-      </div>
-
       {/* Filters */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+      <Card className="border border-slate-200 shadow-sm bg-white">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4">
+          <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
             <Filter className="h-5 w-5" />
             Filters
           </CardTitle>
-          <Button onClick={handleResetFilters} variant="outline" size="sm">
-            Reset Filters
-          </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto justify-end">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-[220px]">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search Order ID, Name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 w-full h-9 text-xs"
+              />
+            </div>
+            
+            {/* Reset Filters */}
+            <Button
+              onClick={handleResetFilters}
+              variant="outline"
+              size="sm"
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 text-xs h-9 shrink-0 px-3"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+              Reset Filters
+            </Button>
+
+            {/* Refresh Button */}
+            <Button
+              onClick={fetchOrders}
+              variant="outline"
+              size="sm"
+              disabled={isLoading}
+              className="bg-white hover:bg-gray-50 text-slate-700 border-gray-200 shadow-sm h-9 text-xs gap-1.5 shrink-0"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 pb-4">
@@ -905,7 +1028,12 @@ export default function AdminOrdersPage() {
                       </div>
                       <div>
                         <div className="text-[11px] text-muted-foreground uppercase">Amount</div>
-                        <div className="font-bold text-primary mt-0.5">₹{Math.ceil(Number(order.amount))}</div>
+                        <div className="font-bold text-primary mt-0.5">₹{Math.round(Number(order.amount))}</div>
+                        {order.codAdjustmentAmount > 0 && (
+                          <div className="text-[10px] mt-0.5 text-amber-600 font-bold bg-amber-50 px-1 rounded">
+                            +₹{Math.round(order.codAdjustmentAmount)} COD
+                          </div>
+                        )}
                       </div>
                       <div>
                         <div className="text-[11px] text-muted-foreground uppercase">Ordered</div>
@@ -985,7 +1113,7 @@ export default function AdminOrdersPage() {
                                   <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-tight">#{order.orderNumber || 'PENDING'}</div>
 
                                   {/* Integrated Edit Action */}
-                                  {!order.isRouteGenerated && (order.status !== 'DELIVERED' && order.status !== 'CANCELLED') && hasPermission('edit_order_address') && (
+                                  {(order.status !== 'DELIVERED' && order.status !== 'CANCELLED') && hasPermission('edit_order_address') && (
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
@@ -1078,7 +1206,21 @@ export default function AdminOrdersPage() {
                                 <div className="text-sm">N/A</div>
                               )}
                             </TableCell>
-                            <TableCell className="font-semibold align-top w-[140px] text-center">₹{Math.ceil(Number(order.amount))}</TableCell>
+                            <TableCell className="font-semibold align-top w-[140px] text-center">
+                              <div className="flex flex-col items-center">
+                                <span>₹{Math.ceil(Number(order.amount))}</span>
+                                {Number(order.walletAmountApplied || 0) > 0 && (
+                                  <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 mt-0.5">
+                                    Wallet: -₹{Math.round(order.walletAmountApplied)}
+                                  </span>
+                                )}
+                                {order.codAdjustmentAmount > 0 && (
+                                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5">
+                                    +₹{Math.round(order.codAdjustmentAmount)} COD
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="align-top w-[200px] whitespace-normal break-words text-center">
                               <div className="text-sm flex flex-col items-center">
                                 <div>{formatDate(order.deliveryDate)}</div>
@@ -1092,7 +1234,13 @@ export default function AdminOrdersPage() {
                             <TableCell className="align-top w-[100px] text-center">
                               <div className="flex flex-col items-center gap-1">
                                 <Badge variant="outline" className="font-mono font-normal whitespace-normal text-center h-auto py-1">
-                                  {order.paymentInstrument || (order.paymentMethod === 'COD' ? 'COD' : 'Online')}
+                                  {Number(order.walletAmountApplied || 0) > 0
+                                    ? (Number(order.amount || 0) === 0
+                                      ? 'Wallet'
+                                      : `WALLET + ${order.paymentInstrument || (order.paymentMethod?.includes('COD') ? 'COD' : 'Online')}`
+                                    )
+                                    : (order.paymentInstrument || (order.paymentMethod === 'COD' ? 'COD' : 'Online'))
+                                  }
                                 </Badge>
                                 {order.isQrPayment && (
                                   <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200 text-[9px] py-0 px-1.5 h-4 uppercase font-bold">
@@ -1403,11 +1551,25 @@ export default function AdminOrdersPage() {
 
 
                         {/* Grand Total always visible outside accordion */}
-                        <div className="bg-muted/50 font-semibold text-foreground px-3 py-2 flex items-center justify-between border-t">
-                          <span className="uppercase text-[12px]">Grand Total</span>
-                          <span>₹{selectedOrder.amount ? Math.ceil(Number(selectedOrder.amount)) :
-                            Math.ceil(selectedOrder.items.reduce((sum, item) => sum + (item.price * item.quantity) + ((item.price * item.quantity) * ((item.gst || 5.0) / 100)), 0))
-                          }</span>
+                        <div className="bg-muted/50 font-semibold text-foreground px-3 py-2 flex flex-col gap-1 border-t">
+                          <div className="flex items-center justify-between">
+                            <span className="uppercase text-[12px]">Grand Total</span>
+                            <span>₹{
+                              Math.ceil(selectedOrder.items.reduce((sum, item) => sum + (item.price * item.quantity) + ((item.price * item.quantity) * ((item.gst || 5.0) / 100)), 0) + (selectedOrder.depositAmount || 0))
+                            }</span>
+                          </div>
+                          {Number(selectedOrder.walletAmountApplied || 0) > 0 && (
+                            <>
+                              <div className="flex items-center justify-between text-xs text-blue-600 font-medium">
+                                <span>Paid via Wallet</span>
+                                <span>-₹{Number(selectedOrder.walletAmountApplied).toFixed(2)}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-xs border-t border-dashed pt-1 mt-1 font-bold text-foreground">
+                                <span>Remaining Amount</span>
+                                <span>₹{Math.ceil(Number(selectedOrder.amount))}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -1430,7 +1592,15 @@ export default function AdminOrdersPage() {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Amount</p>
-                          <p className="font-medium text-base text-foreground">₹{Math.ceil(Number(selectedOrder.amount))}</p>
+                          <p className="font-medium text-base text-foreground">
+                            ₹{Math.ceil(Number(selectedOrder.amount))}
+                            {Number(selectedOrder.walletAmountApplied || 0) > 0 && (
+                              <span className="block text-[10px] text-blue-600 font-medium mt-0.5">
+                                (Wallet: -₹{Math.round(selectedOrder.walletAmountApplied)})
+                              </span>
+                            )}
+                          </p>
+                          <p className="font-medium text-base text-foreground">₹{Math.round(Number(selectedOrder.amount))}</p>
                         </div>
                       </div>
                     )}
@@ -1623,6 +1793,34 @@ export default function AdminOrdersPage() {
                   </div>
 
                   <div className="flex justify-end gap-2 pt-4 mt-4">
+                    {/* Edit Items Button */}
+                    {selectedOrder.status !== 'DELIVERED' &&
+                      selectedOrder.status !== 'CANCELLED' &&
+                      hasPermission('edit_order_items') && (
+                        <Button
+                          variant="outline"
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                          onClick={() => openEditItemsDialog(selectedOrder)}
+                        >
+                          <ShoppingCart className="h-4 w-4 mr-2" />
+                          Edit Items
+                        </Button>
+                      )}
+
+                    {/* COD Breakdown display if any */}
+                    {selectedOrder.codAdjustmentAmount > 0 && (
+                      <div className="flex-1 flex items-center">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs">
+                          <div className="font-bold text-amber-800 mb-1">Payment Breakdown (Admin Edited)</div>
+                          <div className="flex gap-4 text-amber-700">
+                            <span>Online Paid: <strong>₹{Math.round(selectedOrder.onlinePaidAmount || 0)}</strong></span>
+                            <span>Extra COD to collect: <strong className="text-red-700">₹{Math.round(selectedOrder.codAdjustmentAmount)}</strong></span>
+                            <span>Total: <strong>₹{Math.round(selectedOrder.amount)}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Reschedule Button - Show for all statuses except DELIVERED/CANCELLED and when route token is NOT generated */}
                     {selectedOrder.status !== 'DELIVERED' &&
                       selectedOrder.status !== 'CANCELLED' &&
@@ -1924,6 +2122,216 @@ export default function AdminOrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Edit Items Dialog ── */}
+      <Dialog open={showEditItemsDialog} onOpenChange={setShowEditItemsDialog}>
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle className="text-xl flex items-center gap-3">
+              <ShoppingCart className="h-5 w-5 text-blue-600" />
+              Edit Order Items
+              {orderToEditItems?.orderNumber && (
+                <span className="text-sm font-normal text-muted-foreground px-2 py-0.5 bg-muted rounded">
+                  #{orderToEditItems.orderNumber}
+                </span>
+              )}
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(orderToEditItems?.paymentMethod === 'ONLINE' || orderToEditItems?.paymentStatus === 'SUCCESS')
+                ? '⚠️ Online-paid order. Reductions → Order Wallet. Increases → extra COD to collect.'
+                : 'Changes will update the COD amount the delivery staff collects.'}
+            </p>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+            {/* Items table */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-muted/30 px-4 py-2 flex items-center justify-between border-b">
+                <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Items</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    const first = allProducts[0];
+                    if (!first) { toast.error('No products available'); return; }
+                    setEditableItems(prev => [...prev, {
+                      productId: first.id,
+                      productName: first.name,
+                      quantity: 1,
+                      price: first.price || 0,
+                      gst: first.gst || 5,
+                      depositAmount: first.depositAmount || 0,
+                    }]);
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add Item
+                </Button>
+              </div>
+
+              <table className="w-full text-sm">
+                <thead className="bg-muted/20 text-muted-foreground text-xs uppercase">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Product</th>
+                    <th className="px-2 py-2 text-center w-20">Qty</th>
+                    <th className="px-2 py-2 text-right w-28">Price (₹)</th>
+                    <th className="px-2 py-2 text-right w-16">GST%</th>
+                    <th className="px-2 py-2 text-right w-24">Total</th>
+                    <th className="px-2 py-2 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {(() => {
+                    const summary = computeEditSummary(editableItems);
+                    const newDepositTotal = summary ? summary.newDepositTotal : 0;
+                    const totalTheoreticalDeposit = editableItems.reduce((s, i) => s + (i.depositAmount || 0) * (i.quantity || 1), 0);
+
+                    return editableItems.map((item, idx) => {
+                      const lineTotal = (item.price || 0) * (item.quantity || 1);
+                      const gstAmt = lineTotal * ((item.gst || 5) / 100);
+
+                      // Calculate actual allocated deposit
+                      const theoreticalDepAmt = (item.depositAmount || 0) * (item.quantity || 1);
+                      const factor = totalTheoreticalDeposit > 0 ? (theoreticalDepAmt / totalTheoreticalDeposit) : 0;
+                      const depAmt = newDepositTotal * factor;
+
+                      const rowTotal = lineTotal + gstAmt + depAmt;
+                      return (
+                        <tr key={idx} className="hover:bg-muted/10">
+                          <td className="px-3 py-2">
+                            <Select
+                              value={item.productId}
+                              onValueChange={(pid) => {
+                                const product = allProducts.find(p => p.id === pid);
+                                if (!product) return;
+                                setEditableItems(prev => prev.map((it, i) => i === idx ? {
+                                  ...it,
+                                  productId: product.id,
+                                  productName: product.name,
+                                  price: product.price || 0,
+                                  gst: product.gst || 5,
+                                  depositAmount: product.depositAmount || 0,
+                                } : it));
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allProducts.map(p => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-2 py-2">
+                            <Input
+                              type="text" inputMode="numeric"
+                              className="h-8 w-14 mx-auto text-sm text-center font-bold"
+                              value={item.quantity === '' ? '' : item.quantity}
+                              onChange={e => {
+                                const val = e.target.value.replace(/[^0-9]/g, '');
+                                setEditableItems(prev => prev.map((it, i) =>
+                                  i === idx ? { ...it, quantity: val === '' ? '' : parseInt(val) } : it))
+                              }}
+                              onBlur={e => {
+                                if (!item.quantity || parseInt(item.quantity) < 1) {
+                                  setEditableItems(prev => prev.map((it, i) => i === idx ? { ...it, quantity: 1 } : it))
+                                }
+                              }}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium text-muted-foreground">
+                            {item.price?.toFixed(2) || '0.00'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-medium text-muted-foreground">
+                            {item.gst || 0}%
+                          </td>
+                          <td className="px-2 py-2 text-right text-xs font-semibold">
+                            ₹{Math.round(rowTotal)}
+                            {depAmt > 0 && (
+                              <div className="text-[10px] text-muted-foreground font-normal">incl. ₹{Math.round(depAmt)} dep</div>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            {editableItems.length > 1 && (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-6 w-6 text-red-400 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => setEditableItems(prev => prev.filter((_, i) => i !== idx))}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Live Summary */}
+            {orderToEditItems && (() => {
+              const summary = computeEditSummary(editableItems);
+              if (!summary) return null;
+              const { newProductTotal, newDepositTotal, newTotal, oldTotal, diff, isOnline } = summary;
+              return (
+                <div className={cn(
+                  "rounded-lg border p-4 space-y-2 text-sm",
+                  diff > 0 ? "bg-amber-50 border-amber-200"
+                    : diff < 0 ? "bg-green-50 border-green-200"
+                      : "bg-muted/20 border-muted"
+                )}>
+                  <div className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <Wallet className="h-4 w-4" /> Order Summary Preview
+                  </div>
+                  <div className="flex justify-between text-xs"><span className="text-muted-foreground">Products + GST</span><span>₹{Math.round(newProductTotal)}</span></div>
+                  {newDepositTotal > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Deposit</span><span>₹{Math.round(newDepositTotal)}</span></div>}
+                  <div className="flex justify-between font-semibold border-t pt-2"><span>New Total</span><span>₹{Math.round(newTotal)}</span></div>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>Previous Total</span><span>₹{Math.round(oldTotal)}</span></div>
+                  <div className={cn("flex justify-between font-bold", diff > 0 ? "text-amber-700" : diff < 0 ? "text-green-700" : "text-muted-foreground")}>
+                    <span>Difference</span><span>{diff > 0 ? '+' : ''}₹{Math.round(Math.abs(diff))}</span>
+                  </div>
+                  {diff > 0 && (
+                    <div className="mt-2 p-2 rounded bg-amber-100 border border-amber-300 text-amber-800 text-xs space-y-0.5">
+                      {isOnline
+                        ? <><strong>Online Paid:</strong> ₹{Math.round(Math.max(0, oldTotal))} | <strong>Extra COD to collect: ₹{Math.round(Math.abs(diff))}</strong></>
+                        : <><strong>New COD amount:</strong> ₹{Math.round(newTotal)} (₹{Math.round(Math.abs(diff))} increase)</>}
+                    </div>
+                  )}
+                  {diff < 0 && (
+                    <div className="mt-2 p-2 rounded bg-green-100 border border-green-300 text-green-800 text-xs">
+                      {isOnline
+                        ? <>💰 <strong>₹{Math.round(Math.abs(diff))}</strong> will be credited to customer&apos;s <strong>Order Wallet</strong></>
+                        : <>New COD amount: <strong>₹{Math.round(newTotal)}</strong></>}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter className="p-4 border-t bg-muted/20 gap-2">
+            <Button variant="outline" onClick={() => setShowEditItemsDialog(false)} disabled={isSavingItems}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEditItems}
+              disabled={isSavingItems || editableItems.length === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isSavingItems ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+              ) : (
+                <><ShoppingCart className="h-4 w-4 mr-2" />Save Changes</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div >
   );
 }

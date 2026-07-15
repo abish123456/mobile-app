@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
         // Body may specify which routeId to start (for multi-route staff)
         const body = await req.json().catch(() => ({}));
         const targetRouteId = body.routeId;
+        const coworkers = body.coworkers;
 
         const targetRoute = targetRouteId
             ? routeRes.rows.find(r => r.routeId === targetRouteId)
@@ -196,8 +197,8 @@ export async function POST(req: NextRequest) {
 
         // 5. Update RouteShift → ACTIVE
         await query(
-            `UPDATE "RouteShift" SET "status" = 'ACTIVE', "startedAt" = NOW(), "updatedAt" = NOW() WHERE "id" = $1`,
-            [routeShiftId]
+            `UPDATE "RouteShift" SET "status" = 'ACTIVE', "startedAt" = NOW(), "coworkers" = $2, "updatedAt" = NOW() WHERE "id" = $1`,
+            [routeShiftId, coworkers ? JSON.stringify(coworkers) : null]
         );
 
         // 6. Log to ShiftLog + AuditLog

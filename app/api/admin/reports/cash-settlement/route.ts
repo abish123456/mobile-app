@@ -44,18 +44,8 @@ export async function GET(req: NextRequest) {
     whereConditions.push(`o."status" != 'CANCELLED'`);
     whereConditions.push(`NOT (o."paymentMethod" = 'ONLINE' AND o."paymentStatus" = 'PENDING')`);
 
-    // Date range filter (strictly delivered date)
-    whereConditions.push(`(
-      (o."deliveryDate" >= $${paramIndex} AND o."deliveryDate" <= $${paramIndex + 1})
-      OR
-      EXISTS (
-        SELECT 1 FROM "RouteOrder" ro_active
-        JOIN "Route" r_active ON ro_active."routeId" = r_active."id"
-        WHERE ro_active."orderId" = o."id" 
-        AND r_active."date" >= $${paramIndex} 
-        AND r_active."date" <= $${paramIndex + 1}
-      )
-    )`);
+    // Date range filter (strictly the route date where it was delivered)
+    whereConditions.push(`(r."date" >= $${paramIndex} AND r."date" <= $${paramIndex + 1})`);
     queryParams.push(startOfDay, endOfDay);
     paramIndex += 2;
 
@@ -70,24 +60,13 @@ export async function GET(req: NextRequest) {
         o."paymentMethod",
         o."paymentInstrument",
         o."isQrPayment",
-        day_ro."routeName" as "assignedRouteName",
-        day_ro."serviceRouteId"
+        sr."name" as "assignedRouteName",
+        sr."id" as "serviceRouteId"
       FROM "Order" o
-      INNER JOIN "RouteOrder" ro ON o."id" = ro."orderId"
-      LEFT JOIN LATERAL (
-        SELECT
-          sr_inner."name" as "routeName",
-          sr_inner."id" as "serviceRouteId"
-        FROM "RouteOrder" ro_inner
-        LEFT JOIN "Route" r_inner ON ro_inner."routeId" = r_inner."id"
-        LEFT JOIN "ServiceRoute" sr_inner ON r_inner."serviceRouteId" = sr_inner."id"
-        WHERE ro_inner."orderId" = o."id"
-        ORDER BY
-          CASE WHEN ro_inner."deliveryStatus" = 'DELIVERED' THEN 0 ELSE 1 END ASC,
-          ro_inner."updatedAt" DESC
-        LIMIT 1
-      ) day_ro ON true
-      ${whereClause} AND ro."deliveryStatus" = 'DELIVERED'
+      INNER JOIN "RouteOrder" ro ON o."id" = ro."orderId" AND ro."deliveryStatus" = 'DELIVERED'
+      INNER JOIN "Route" r ON ro."routeId" = r."id"
+      LEFT JOIN "ServiceRoute" sr ON r."serviceRouteId" = sr."id"
+      ${whereClause}
     `;
 
     const ordersRes = await query<any>(sql, queryParams);

@@ -192,6 +192,7 @@ export async function GET(req: NextRequest) {
           o."quantity",
           o."amount",
           o."paymentStatus",
+          o."codAdjustmentAmount",
           day_ro."deliveryStatus",
           day_ro."codCollected"
         FROM "Order" o
@@ -219,6 +220,7 @@ export async function GET(req: NextRequest) {
           o."quantity",
           o."amount",
           o."paymentStatus",
+          o."codAdjustmentAmount",
           day_ro."deliveryStatus",
           day_ro."codCollected"
         FROM "Order" o
@@ -423,6 +425,7 @@ export async function GET(req: NextRequest) {
         quantity: number;
         amount: number;
         paymentStatus: string;
+        codAdjustmentAmount: number | null;
         deliveryStatus: string | null;
         codCollected: boolean | null;
       }>(statsQuery, statsParams),
@@ -499,7 +502,7 @@ export async function GET(req: NextRequest) {
         .reduce((sum, p) => sum + p.amount, 0);
 
       const totalPaidInPaise = onlinePaidInPaise + cashPaidInPaise;
-      const outstandingAmountInPaise = Math.max(0, orderAmountInPaise - totalPaidInPaise);
+      const outstandingAmountInPaise = row.paymentStatus === 'SUCCESS' ? Number(row.codAdjustmentAmount || 0) : Math.max(0, orderAmountInPaise - totalPaidInPaise);
 
       // Online Payment Total (strictly online)
       onlinePaymentTotal += onlinePaidInPaise;
@@ -564,7 +567,7 @@ export async function GET(req: NextRequest) {
     if (includeDetails) {
       detailedOrders = detailsRes.rows.map(order => ({
         ...order,
-        amount: order.amount ? order.amount / 100 : 0,
+        amount: order.amount ? Math.round(order.amount / 100) : 0,
         routeName: order.routeName || '-',
       }));
 

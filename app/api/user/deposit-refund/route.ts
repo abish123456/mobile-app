@@ -19,10 +19,18 @@ export async function POST(req: NextRequest) {
         }
 
         // Bank details validation only for ONLINE refunds
-        // If refundMethod is not provided, default to strict check (backward compatibility)
-        // If refundMethod is 'COD', skip bank details check
-        if (refundMethod !== 'COD' && (!bankDetails || (!bankDetails.upiId && (!bankDetails.accountNumber)))) {
-            return NextResponse.json({ message: "Bank details required" }, { status: 400 });
+        if (refundMethod !== 'COD') {
+            if (!bankDetails) {
+                return NextResponse.json({ message: "Bank details required" }, { status: 400 });
+            }
+            if (bankDetails.type === 'upi' && !bankDetails.upiId) {
+                return NextResponse.json({ message: "UPI ID is required" }, { status: 400 });
+            }
+            if (bankDetails.type === 'account') {
+                if (!bankDetails.accountNumber || !bankDetails.ifscCode || !bankDetails.bankName || !bankDetails.accountHolderName) {
+                    return NextResponse.json({ message: "Account Number, IFSC Code, Bank Name, and Account Holder Name are required" }, { status: 400 });
+                }
+            }
         }
 
         // Get customer and verify balance
@@ -96,8 +104,8 @@ export async function POST(req: NextRequest) {
 
         await query(
             `INSERT INTO "DepositRefundRequest"
-             ("id", "customerId", "amount", "quantity", "status", "upiId", "accountNumber", "ifscCode", "bankName", "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, $4, 'REQUESTED', $5, $6, $7, $8, NOW(), NOW())`,
+             ("id", "customerId", "amount", "quantity", "status", "upiId", "accountNumber", "ifscCode", "bankName", "accountHolderName", "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, $4, 'REQUESTED', $5, $6, $7, $8, $9, NOW(), NOW())`,
             [
                 requestId,
                 customer.id,
@@ -106,7 +114,8 @@ export async function POST(req: NextRequest) {
                 bankDetails?.upiId || null,
                 bankDetails?.accountNumber || null,
                 bankDetails?.ifscCode || null,
-                bankDetails?.bankName || (refundMethod === 'COD' ? 'CASH' : null)
+                bankDetails?.bankName || (refundMethod === 'COD' ? 'CASH' : null),
+                bankDetails?.accountHolderName || null
             ]
         );
 

@@ -33,6 +33,11 @@ export default function OrdersPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [isFetchingPaymentMethods, setIsFetchingPaymentMethods] = useState(false);
 
+  // Wallet State
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [useWallet, setUseWallet] = useState(true);
+  const [appliedWalletAmount, setAppliedWalletAmount] = useState('');
+
   // Pagination state
   const [pagination, setPagination] = useState({
     page: 1,
@@ -111,6 +116,7 @@ export default function OrdersPage() {
         const data = await response.json();
         const pm = data.profile?.paymentMethods || { upi: [], card: [] };
         setPaymentMethods(pm);
+        setWalletBalance(data.profile?.orderWalletBalance || 0);
 
         // Set default payment method if available
         const defaultPm = data.profile?.defaultPaymentMethod;
@@ -185,9 +191,54 @@ export default function OrdersPage() {
     setIsPaymentProcessing(true);
     setIsLoading(true);
 
+    let walletDeducted = false;
+    let orderWalletApplied = 0;
+
     try {
-      // Step 1: Create Razorpay order
-      const amountInPaise = Math.round(order.amount * 100);
+      const outstanding = Math.max(0, Number(order.amount || 0) - Number(order.paidAmount || 0));
+      let currentOutstanding = outstanding;
+      if (useWallet && walletBalance > 0) {
+        const maxWalletDeduction = Math.min(walletBalance, currentOutstanding);
+        if (appliedWalletAmount !== undefined && appliedWalletAmount !== '') {
+          const parsedAmount = parseFloat(appliedWalletAmount);
+          if (!isNaN(parsedAmount) && parsedAmount > 0) {
+            orderWalletApplied = Math.min(parsedAmount, maxWalletDeduction);
+          }
+        } else {
+          orderWalletApplied = maxWalletDeduction;
+        }
+      }
+
+      if (orderWalletApplied > 0) {
+        // Apply wallet balance to order
+        const walletResponse = await fetch(`/shop/api/orders/${order.id}/pay-with-wallet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appliedWalletAmount: orderWalletApplied })
+        });
+        const walletData = await walletResponse.json();
+        if (!walletResponse.ok || !walletData.success) {
+          throw new Error(walletData.message || 'Failed to apply wallet balance');
+        }
+        
+        walletDeducted = true;
+        currentOutstanding = walletData.remainingAmount;
+
+        if (walletData.paymentComplete) {
+          // Completely paid via wallet
+          setIsPaymentModalOpen(false);
+          setIsPaymentSuccess(true);
+          toast.success('Payment successful using wallet!');
+          refreshOrders();
+          setIsLoading(false);
+          setIsPaymentProcessing(false);
+          setTimeout(() => setIsPaymentSuccess(false), 3000);
+          return; // Stop here, no Razorpay needed
+        }
+      }
+
+      // Step 1: Create Razorpay order for the remaining amount
+      const amountInPaise = Math.round(currentOutstanding * 100);
 
       // Get selected payment method ID (only for cards to enable quick pay)
       // If 'new' method is selected, send null so Razorpay doesn't use saved token
@@ -230,6 +281,8 @@ export default function OrdersPage() {
         });
       }
 
+      let isPaymentCompleted = false;
+
       const razorpayOptions = {
         key: paymentData.key,
         amount: paymentData.amount,
@@ -254,12 +307,27 @@ export default function OrdersPage() {
           paylater: false,
         },
         modal: {
-          ondismiss: () => {
+          ondismiss: async () => {
             setIsLoading(false);
             setIsPaymentProcessing(false);
+            
+            // If user closed the modal and wallet was deducted, revert it
+            if (!isPaymentCompleted && walletDeducted && orderWalletApplied > 0) {
+              try {
+                const revertRes = await fetch(`/shop/api/orders/${order.id}/revert-wallet-payment`, {
+                  method: 'POST',
+                });
+                if (revertRes.ok) {
+                  refreshOrders();
+                }
+              } catch (e) {
+                console.error('Failed to revert wallet payment', e);
+              }
+            }
           }
         },
         handler: async (response) => {
+          isPaymentCompleted = true;
           setIsPaymentModalOpen(false); // Close the modal on success
           setIsPaymentSuccess(true);
 
@@ -308,6 +376,21 @@ export default function OrdersPage() {
     } catch (err) {
       console.error('Error initiating payment:', err);
       toast.error(err.message || 'Failed to initiate payment');
+      
+      // If payment initiation failed and wallet was deducted, revert it
+      if (walletDeducted && orderWalletApplied > 0) {
+        try {
+          const revertRes = await fetch(`/shop/api/orders/${order.id}/revert-wallet-payment`, {
+            method: 'POST',
+          });
+          if (revertRes.ok) {
+            refreshOrders();
+          }
+        } catch (e) {
+          console.error('Failed to revert wallet payment', e);
+        }
+      }
+
       setIsLoading(false);
       setIsPaymentProcessing(false);
     }
@@ -554,6 +637,18 @@ export default function OrdersPage() {
     if (method === 'ONLINE' && status === 'SUCCESS') {
       return 'Online - Paid';
     }
+    if (method === 'WALLET' && status === 'SUCCESS') {
+      return 'Wallet - Paid';
+    }
+    if (method && method.startsWith('WALLET + ')) {
+      const remainingMethod = method.split(' + ')[1];
+      const remainingLabel = remainingMethod === 'ONLINE' ? 'Online' : remainingMethod;
+      if (status === 'SUCCESS') {
+        return `Wallet + ${remainingLabel} - Paid`;
+      } else {
+        return `Wallet + ${remainingLabel} (${status === 'COD' ? 'COD' : status === 'SUCCESS' ? 'Paid' : status.toLowerCase()})`;
+      }
+    }
 
     switch (status) {
       case 'SUCCESS':
@@ -762,7 +857,7 @@ export default function OrdersPage() {
         <div className={`space-y-3 sm:space-y-4 transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
           {sortedOrders.map((order, index) => (
             <Card key={order.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="p-4 sm:p-6">
+              <CardHeader className="p-4 sm:p-6 pb-0 sm:pb-0">
                 <div className="flex flex-row flex-wrap items-start justify-between gap-x-2 gap-y-3">
                   <div className="space-y-1">
                     <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -951,17 +1046,42 @@ export default function OrdersPage() {
                 </div>
                 <div className="p-3 sm:pt-4 border-t">
                   <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <p className="text-xs sm:text-sm text-muted-foreground">Total Amount</p>
-                      <p className="text-base sm:text-lg font-semibold">₹{Math.round(Number(order.amount))}</p>
-                      {order.paidAmount < order.amount && order.paidAmount > 0 && (
-                        <p className="text-[10px] sm:text-xs text-green-600 font-medium">
-                          Paid: ₹{Math.round(Number(order.paidAmount))}
-                        </p>
+                    <div className="flex flex-col space-y-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs sm:text-sm text-muted-foreground">Total:</span>
+                        <span className="text-base sm:text-lg font-semibold text-foreground">₹{Math.round(Number(order.amount) + Number(order.walletAmountApplied || 0))}</span>
+                      </div>
+                      {Number(order.walletAmountApplied || 0) > 0 && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs text-muted-foreground">Wallet Used:</span>
+                          <span className="text-xs font-semibold text-blue-600">₹{Math.round(order.walletAmountApplied)}</span>
+                        </div>
+                      )}
+                      {Number(order.amount) > 0 && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {String(order.paymentMethod).includes('COD') ? 'COD:' : 'Online Paid:'}
+                          </span>
+                          <span className="text-xs font-semibold text-green-600">
+                            ₹{Math.round(Number(order.amount))}
+                          </span>
+                        </div>
+                      )}
+                      {order.paidAmount > order.amount && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs text-muted-foreground">Wallet Credit:</span>
+                          <span className="text-xs font-semibold text-blue-600">₹{Math.round(Number(order.paidAmount) - Number(order.amount))}</span>
+                        </div>
+                      )}
+                      {(order.codAdjustmentAmount || 0) > 0 && Math.round(Number(order.amount || 0) - Number(order.paidAmount || 0)) > 0 && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs text-muted-foreground">Extra Order Amount:</span>
+                          <span className="text-xs font-bold text-red-600">₹{Math.min(Math.round(order.codAdjustmentAmount), Math.max(0, Math.round(Number(order.amount || 0) - Number(order.paidAmount || 0))))}</span>
+                        </div>
                       )}
                     </div>
 
-                    {(order.paymentStatus === 'COD' || order.paymentStatus === 'PENDING') &&
+                    {Math.round(Number(order.amount || 0) - Number(order.paidAmount || 0)) > 0 &&
                       order.status !== 'DELIVERED' &&
                       order.status !== 'CANCELLED' &&
                       order.status !== 'NOT_DELIVERED' && (
@@ -1062,6 +1182,90 @@ export default function OrdersPage() {
               </div>
             )}
 
+              {walletBalance > 0 && (
+                <div className="border-t pt-3 space-y-2 pb-2 border-primary/20">
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm font-semibold cursor-pointer flex items-center gap-1.5" onClick={() => {
+                        const newChecked = !useWallet;
+                        setUseWallet(newChecked);
+                        if (newChecked) {
+                          const outstanding = Math.max(0, Number(selectedOrder?.amount || 0) - Number(selectedOrder?.paidAmount || 0));
+                          setAppliedWalletAmount(Math.min(walletBalance, outstanding).toFixed(2));
+                        } else {
+                          setAppliedWalletAmount('');
+                        }
+                      }}>
+                      <div className="h-4 w-4 text-primary"><CreditCard className="h-4 w-4"/></div>
+                      Use Order Wallet Balance (₹{walletBalance.toFixed(2)})
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={useWallet}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseWallet(checked);
+                        if (checked) {
+                          const outstanding = Math.max(0, Number(selectedOrder?.amount || 0) - Number(selectedOrder?.paidAmount || 0));
+                          setAppliedWalletAmount(Math.min(walletBalance, outstanding).toFixed(2));
+                        } else {
+                          setAppliedWalletAmount('');
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                  </div>
+                  
+                  {useWallet && (
+                    <div className="pl-6 pr-1 py-1.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="flex flex-col gap-1 flex-1">
+                        <span className="text-xs text-muted-foreground">Amount to use:</span>
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500 font-medium">₹</span>
+                            <input
+                              type="number"
+                              value={appliedWalletAmount}
+                              min={0}
+                              step="any"
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '') {
+                                  setAppliedWalletAmount('');
+                                  return;
+                                }
+                                const num = parseFloat(val);
+                                const outstanding = Math.max(0, Number(selectedOrder?.amount || 0) - Number(selectedOrder?.paidAmount || 0));
+                                const maxWalletDeduction = Math.min(walletBalance, outstanding);
+                                if (!isNaN(num)) {
+                                  if (num > maxWalletDeduction) {
+                                    setAppliedWalletAmount(maxWalletDeduction.toString());
+                                  } else if (num < 0) {
+                                    setAppliedWalletAmount('0');
+                                  } else {
+                                    setAppliedWalletAmount(val);
+                                  }
+                                }
+                              }}
+                              className="w-full text-sm font-semibold pl-6 pr-3 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const outstanding = Math.max(0, Number(selectedOrder?.amount || 0) - Number(selectedOrder?.paidAmount || 0));
+                              setAppliedWalletAmount(Math.min(walletBalance, outstanding).toFixed(2));
+                            }}
+                            className="h-8 px-3 text-xs font-semibold border rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            Use Max
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
             <Button
               className="w-full mt-4"
               size="lg"
@@ -1075,7 +1279,22 @@ export default function OrdersPage() {
                 </>
               ) : (
                 <>
-                  Pay ₹{Math.round(selectedOrder?.amount || 0)}
+                  Pay ₹{(() => {
+                    const outstanding = Math.max(0, Math.round(Number(selectedOrder?.amount || 0) - Number(selectedOrder?.paidAmount || 0)));
+                    let walletApplied = 0;
+                    if (useWallet && walletBalance > 0) {
+                       const maxWalletDeduction = Math.min(walletBalance, outstanding);
+                       if (appliedWalletAmount !== undefined && appliedWalletAmount !== '') {
+                         const parsedAmount = parseFloat(appliedWalletAmount);
+                         if (!isNaN(parsedAmount) && parsedAmount > 0) {
+                           walletApplied = Math.min(parsedAmount, maxWalletDeduction);
+                         }
+                       } else {
+                         walletApplied = maxWalletDeduction;
+                       }
+                    }
+                    return Math.max(0, outstanding - walletApplied);
+                  })()}
                 </>
               )}
             </Button>

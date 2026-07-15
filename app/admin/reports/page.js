@@ -989,40 +989,36 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Reports</h1>
-          <p className="text-muted-foreground">View detailed delivery reports</p>
-        </div>
-        {hasPermission('export_general_reports') && (
-          <Button
-            onClick={() => setIsDownloadDialogOpen(true)}
-            variant="outline"
-            className="gap-2"
-            disabled={isLoading || reportData.orders.length === 0}
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Download
-          </Button>
-        )}
-      </div>
-
-      <Card>
+      <Card className="border border-slate-200 shadow-sm bg-white">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div className="space-y-1">
-            <CardTitle className="text-xl font-bold">Filters</CardTitle>
-            <CardDescription>Select date range and delivery Staff</CardDescription>
+            <CardTitle className="text-lg font-semibold text-slate-800">Filters</CardTitle>
+            <CardDescription className="text-xs text-slate-500">Select date range and delivery Staff</CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleResetFilters}
-            disabled={!isFilterActive}
-            className="gap-2 text-foreground transition-colors disabled:opacity-50"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset Filters
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetFilters}
+              disabled={!isFilterActive}
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 text-xs h-9 shrink-0 px-3 disabled:opacity-50"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+              Reset Filters
+            </Button>
+            {hasPermission('export_general_reports') && (
+              <Button
+                onClick={() => setIsDownloadDialogOpen(true)}
+                variant="outline"
+                size="sm"
+                className="bg-white hover:bg-gray-50 text-slate-700 border-gray-200 shadow-sm h-9 text-xs gap-1.5 shrink-0"
+                disabled={isLoading || reportData.orders.length === 0}
+              >
+                {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Download
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">

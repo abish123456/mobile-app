@@ -12,7 +12,7 @@ import QuantitySelector from '../../../components/app/QuantitySelector';
 import DeliverySlotSelector from '../../../components/app/DeliverySlotSelector';
 import OrderSummary, { calculateTotal } from '../../../components/app/OrderSummary';
 import PaymentMethodDropdown from '../../../components/app/PaymentMethodDropdown';
-import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../../../components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../../../components/ui/alert-dialog';
 import { Loader2, ShoppingCart, Wallet, Smartphone, CreditCard, Package, ArrowLeft, MapPin, Pencil, Check, X, Banknote, Landmark, Plus, ArrowUpRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentPolicy from '../../../components/app/PaymentPolicy';
@@ -52,6 +52,7 @@ export default function OrderPage() {
   const [dateError, setDateError] = useState('');
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showPendingCansDialog, setShowPendingCansDialog] = useState(false);
   const [serviceAreas, setServiceAreas] = useState([]);
   const [showServiceAreaError, setShowServiceAreaError] = useState(false);
 
@@ -172,6 +173,8 @@ export default function OrderPage() {
   const [onlinePaymentMethodType, setOnlinePaymentMethodType] = useState('upi'); // 'upi', 'card' or 'netbanking'
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null); // { id, type, details }
   const [paymentMethods, setPaymentMethods] = useState({ upi: [], card: [] });
+  const [useOrderWallet, setUseOrderWallet] = useState(true);
+  const [appliedWalletAmount, setAppliedWalletAmount] = useState('');
 
 
   // Load cart from server
@@ -470,7 +473,23 @@ export default function OrderPage() {
     const subtotal = calculateSubtotal();
     const gst = calculateGST();
     const depositInfo = calculateDeposit();
-    return subtotal + gst + (depositInfo?.toPay || 0);
+    const grossTotal = subtotal + gst + (depositInfo?.toPay || 0);
+    const orderWalletAvailable = customer?.orderWalletBalance || 0;
+    
+    let orderWalletApplied = 0;
+    if (useOrderWallet) {
+      const maxWalletDeduction = Math.min(orderWalletAvailable, grossTotal);
+      if (appliedWalletAmount !== undefined && appliedWalletAmount !== '') {
+        const parsedAmount = parseFloat(appliedWalletAmount);
+        if (!isNaN(parsedAmount) && parsedAmount >= 0) {
+          orderWalletApplied = Math.min(parsedAmount, maxWalletDeduction);
+        }
+      } else {
+        orderWalletApplied = maxWalletDeduction;
+      }
+    }
+    
+    return grossTotal - orderWalletApplied;
   };
 
   const handleAddressChange = (field, value) => {
@@ -563,6 +582,15 @@ export default function OrderPage() {
     setIsEditingAddress(false);
   };
 
+  const onPlaceOrderClick = () => {
+    // If the customer has pending undelivered cans from active orders, show warning.
+    if (customer && customer.pendingOrdered > 0) {
+      setShowPendingCansDialog(true);
+    } else {
+      handlePlaceOrder();
+    }
+  };
+
   const handlePlaceOrder = async () => {
     setError('');
     setDateError('');
@@ -650,6 +678,8 @@ export default function OrderPage() {
           quantity: totalQuantity, // Total quantity from cart
           deliverySlot,
           paymentType: paymentCategory, // Send payment type (COD or ONLINE)
+          useOrderWallet,
+          appliedWalletAmount: useOrderWallet && appliedWalletAmount !== '' ? Number(appliedWalletAmount) : undefined,
           // api/orders requires paymentMethodId for online payments
           // We send 'ONLINE' for new methods to pass validation
           paymentMethodId: paymentCategory === 'ONLINE' ? (selectedPaymentMethod?.id === 'new' ? 'ONLINE' : selectedPaymentMethod?.id) : undefined,
@@ -726,6 +756,28 @@ export default function OrderPage() {
       // Step 2: Create Razorpay order and process payment
       const totalAmount = data.order.amount; // Use server-calculated amount
       const amountInPaise = Math.round(totalAmount * 100); // Convert to paise (INR)
+
+      // If the total amount is 0, skip Razorpay entirely
+      if (amountInPaise === 0) {
+        // Clear cart in background
+        (async () => {
+          try {
+            for (const item of cart) {
+              await fetch('/shop/api/cart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: item.id, quantity: 0 }),
+              });
+            }
+            localStorage.removeItem('cart');
+            window.dispatchEvent(new Event('cartUpdated'));
+          } catch (err) {
+            console.error('Error clearing cart:', err);
+          }
+        })();
+        router.replace('/app/orders?payment=success&orderId=' + data.order.id);
+        return;
+      }
 
       try {
         // Get selected payment method ID (only for cards to enable quick pay)
@@ -1123,6 +1175,11 @@ export default function OrderPage() {
           subtotal={subtotal}
           gst={gst}
           depositInfo={calculateDeposit()}
+          useOrderWallet={useOrderWallet}
+          setUseOrderWallet={setUseOrderWallet}
+          appliedWalletAmount={appliedWalletAmount}
+          setAppliedWalletAmount={setAppliedWalletAmount}
+          customer={customer}
         />
 
         <Card>
@@ -1336,106 +1393,124 @@ export default function OrderPage() {
             <div className="space-y-4">
               <p className="text-sm font-medium">Payment Method</p>
 
-              {/* Payment Category Selection */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div
-                  className={`
-                    relative border rounded-lg p-3 cursor-pointer flex flex-col items-center gap-2 transition-all
-                    ${paymentCategory === 'ONLINE' ? 'bg-green-50 border-green-600 ring-1 ring-green-600' : 'bg-background hover:bg-muted/50'}
-                  `}
-                  onClick={() => setPaymentCategory('ONLINE')}
-                >
-                  {paymentCategory === 'ONLINE' && (
-                    <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-green-600 flex items-center justify-center text-white">
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    </div>
-                  )}
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${paymentCategory === 'ONLINE' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}>
-                    <Smartphone className="h-5 w-5" />
-                  </div>
-                  <span className="font-medium text-sm">Online Payment</span>
-                </div>
-
-                <div
-                  className={`
-                    relative border rounded-lg p-3 cursor-pointer flex flex-col items-center gap-2 transition-all
-                    ${paymentCategory === 'COD' ? 'bg-green-50 border-green-600 ring-1 ring-green-600' : 'bg-background hover:bg-muted/50'}
-                  `}
-                  onClick={() => setPaymentCategory('COD')}
-                >
-                  {paymentCategory === 'COD' && (
-                    <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-green-600 flex items-center justify-center text-white">
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    </div>
-                  )}
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${paymentCategory === 'COD' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}>
-                    <Banknote className="h-5 w-5" />
-                  </div>
-                  <span className="font-medium text-sm">Cash on Delivery</span>
-                </div>
-              </div>
-
-              {/* Online Payment Options */}
-              {paymentCategory === 'ONLINE' && (
-                <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2">
-                  <div className="space-y-3 ">
-                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={`flex items-center justify-center gap-2 h-10 sm:h-9 text-sm ${onlinePaymentMethodType === 'upi' ? 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800 ring-1 ring-green-600' : ''}`}
-                        onClick={() => setOnlinePaymentMethodType('upi')}
-                      >
-                        <Smartphone className="h-4 w-4" />
-                        UPI
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={`flex items-center justify-center gap-2 h-10 sm:h-9 text-sm ${onlinePaymentMethodType === 'card' ? 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800 ring-1 ring-green-600' : ''}`}
-                        onClick={() => setOnlinePaymentMethodType('card')}
-                      >
-                        <CreditCard className="h-4 w-4" />
-                        Card
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={`flex items-center justify-center gap-2 h-10 sm:h-9 text-sm ${onlinePaymentMethodType === 'netbanking' ? 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800 ring-1 ring-green-600' : ''}`}
-                        onClick={() => setOnlinePaymentMethodType('netbanking')}
-                      >
-                        <Landmark className="h-4 w-4" />
-                        Net Banking
-                      </Button>
-                    </div>
-                    {paymentMethods[onlinePaymentMethodType]?.length > 0 && (
-                      <PaymentMethodDropdown
-                        paymentMethods={paymentMethods}
-                        selectedType={onlinePaymentMethodType}
-                        selectedId={selectedPaymentMethod?.id}
-                        onSelect={setSelectedPaymentMethod}
-                        errors={{}}
-                      />
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* COD Info */}
-              {paymentCategory === 'COD' && (
-                <div className="bg-muted/30 border rounded-lg p-4 animate-in fade-in slide-in-from-top-2">
+              {Math.round(totalAmount) <= 0 ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 animate-in fade-in slide-in-from-top-2 mt-4">
                   <div className="flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-green-100 text-blue-600 flex items-center justify-center flex-shrink-0">
-                      <Banknote className="h-4 w-4" />
+                    <div className="h-8 w-8 rounded-full bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">
+                      <Check className="h-5 w-5" />
                     </div>
                     <div>
-                      <h4 className="font-medium text-sm">Pay on Delivery</h4>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Pay cash at the time of delivery.
+                      <h4 className="font-medium text-green-900 text-sm">No Payment Required</h4>
+                      <p className="text-xs text-green-700 mt-1">
+                        Your Order Wallet balance completely covers the cost of this order.
                       </p>
                     </div>
                   </div>
                 </div>
+              ) : (
+                <>
+                  {/* Payment Category Selection */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div
+                      className={`
+                        relative border rounded-lg p-3 cursor-pointer flex flex-col items-center gap-2 transition-all
+                        ${paymentCategory === 'ONLINE' ? 'bg-green-50 border-green-600 ring-1 ring-green-600' : 'bg-background hover:bg-muted/50'}
+                      `}
+                      onClick={() => setPaymentCategory('ONLINE')}
+                    >
+                      {paymentCategory === 'ONLINE' && (
+                        <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-green-600 flex items-center justify-center text-white">
+                          <Check className="h-3 w-3" strokeWidth={3} />
+                        </div>
+                      )}
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${paymentCategory === 'ONLINE' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}>
+                        <Smartphone className="h-5 w-5" />
+                      </div>
+                      <span className="font-medium text-sm">Online Payment</span>
+                    </div>
+
+                    <div
+                      className={`
+                        relative border rounded-lg p-3 cursor-pointer flex flex-col items-center gap-2 transition-all
+                        ${paymentCategory === 'COD' ? 'bg-green-50 border-green-600 ring-1 ring-green-600' : 'bg-background hover:bg-muted/50'}
+                      `}
+                      onClick={() => setPaymentCategory('COD')}
+                    >
+                      {paymentCategory === 'COD' && (
+                        <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-green-600 flex items-center justify-center text-white">
+                          <Check className="h-3 w-3" strokeWidth={3} />
+                        </div>
+                      )}
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${paymentCategory === 'COD' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}>
+                        <Banknote className="h-5 w-5" />
+                      </div>
+                      <span className="font-medium text-sm">Cash on Delivery</span>
+                    </div>
+                  </div>
+
+                  {/* Online Payment Options */}
+                  {paymentCategory === 'ONLINE' && (
+                    <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2">
+                      <div className="space-y-3 ">
+                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={`flex items-center justify-center gap-2 h-10 sm:h-9 text-sm ${onlinePaymentMethodType === 'upi' ? 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800 ring-1 ring-green-600' : ''}`}
+                            onClick={() => setOnlinePaymentMethodType('upi')}
+                          >
+                            <Smartphone className="h-4 w-4" />
+                            UPI
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={`flex items-center justify-center gap-2 h-10 sm:h-9 text-sm ${onlinePaymentMethodType === 'card' ? 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800 ring-1 ring-green-600' : ''}`}
+                            onClick={() => setOnlinePaymentMethodType('card')}
+                          >
+                            <CreditCard className="h-4 w-4" />
+                            Card
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className={`flex items-center justify-center gap-2 h-10 sm:h-9 text-sm ${onlinePaymentMethodType === 'netbanking' ? 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800 ring-1 ring-green-600' : ''}`}
+                            onClick={() => setOnlinePaymentMethodType('netbanking')}
+                          >
+                            <Landmark className="h-4 w-4" />
+                            Net Banking
+                          </Button>
+                        </div>
+                        {paymentMethods[onlinePaymentMethodType]?.length > 0 && (
+                          <PaymentMethodDropdown
+                            paymentMethods={paymentMethods}
+                            selectedType={onlinePaymentMethodType}
+                            selectedId={selectedPaymentMethod?.id}
+                            onSelect={setSelectedPaymentMethod}
+                            errors={{}}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* COD Info */}
+                  {paymentCategory === 'COD' && (
+                    <div className="bg-muted/30 border rounded-lg p-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-green-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                          <Banknote className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">Pay on Delivery</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Pay cash at the time of delivery.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </CardContent>
@@ -1459,7 +1534,7 @@ export default function OrderPage() {
               type="button"
               className="flex-1 flex items-center justify-center gap-2 h-11 sm:h-12"
               size="lg"
-              onClick={handlePlaceOrder}
+              onClick={onPlaceOrderClick}
               disabled={isLoading || isEditingAddress}
             >
               {isLoading ? (
@@ -1503,6 +1578,31 @@ export default function OrderPage() {
               }}
             >
               OK, Go to Cart
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Pending Cans Confirmation Dialog */}
+      <AlertDialog open={showPendingCansDialog} onOpenChange={setShowPendingCansDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pending Undelivered Cans</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {customer?.pendingOrdered} undelivered water can(s) from your previous orders. Are you sure you want to place a new order?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowPendingCansDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowPendingCansDialog(false);
+                handlePlaceOrder();
+              }}
+            >
+              Continue
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

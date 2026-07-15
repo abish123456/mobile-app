@@ -426,146 +426,128 @@ export default function RouteWiseDeliveryReportPage() {
 
   return (
     <div className="space-y-6 w-full pb-10">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-800">
-            Route-wise Delivery & Payment Report
-          </h1>
-          <p className="text-gray-500 mt-1">Detailed delivery outcomes, items count, and cash vs online splits aggregated by route.</p>
-        </div>
-        {!isLoading && filteredData.length > 0 && hasPermission('export_route_wise_reports') && (
-          <div className="flex gap-3 print:hidden">
+      <Card className="border border-slate-200 shadow-sm bg-white">
+        <CardHeader className="border-b flex flex-col xl:flex-row xl:items-center justify-between gap-4 py-4 print:hidden">
+          <CardTitle className="text-lg font-semibold text-slate-800 shrink-0">Route-wise Delivery & Payment</CardTitle>
+
+          {/* Filters & Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full xl:w-auto justify-end">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              {/* Start Date */}
+              <div className="relative w-full sm:w-36">
+                <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !startDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{startDate ? format(startDate, "dd-MM-yyyy") : <span>Start Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={startDate} onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* End Date */}
+              <div className="relative w-full sm:w-36">
+                <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !endDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{endDate ? format(endDate, "dd-MM-yyyy") : <span>End Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={endDate} onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Route */}
+              <div className="relative w-full sm:w-36">
+                <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
+                  <SelectTrigger className="w-full text-xs h-9 bg-white border-slate-200 shadow-sm">
+                    <SelectValue placeholder="All Routes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Routes</SelectItem>
+                    {routes.map(route => (
+                      <SelectItem key={route.id} value={route.id}>{route.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Outcomes */}
+              <div className="relative w-full sm:w-36">
+                <Select value={selectedDeliveryStatus} onValueChange={setSelectedDeliveryStatus}>
+                  <SelectTrigger className="w-full text-xs h-9 bg-white border-slate-200 shadow-sm">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Outcomes</SelectItem>
+                    <SelectItem value="DELIVERED">Delivered</SelectItem>
+                    <SelectItem value="NOT_DELIVERED">Not Delivered</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Reset Filters */}
             <Button
-              onClick={handlePrint}
               variant="outline"
-              className="border-blue-600 text-blue-600 hover:bg-blue-50 shadow-md transition-all hover:scale-[1.02] gap-2 h-11 px-5"
+              size="sm"
+              onClick={handleResetFilters}
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 text-xs h-9 shrink-0 px-3"
             >
-              <Printer className="h-5 w-5" /> Print
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
             </Button>
-            <Button
-              onClick={downloadExcel}
-              className="bg-green-600 hover:bg-green-700 shadow-md transition-all hover:scale-[1.02] text-white gap-2 h-11 px-5"
-            >
-              <FileDown className="h-5 w-5" /> Download Excel
-            </Button>
+
+            {/* Print & Download buttons */}
+            {!isLoading && filteredData.length > 0 && hasPermission('export_route_wise_reports') && (
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  onClick={handlePrint}
+                  variant="outline"
+                  size="sm"
+                  className="bg-white hover:bg-gray-50 text-blue-600 border-blue-200 hover:border-blue-300 shadow-sm h-9 text-xs gap-1.5"
+                >
+                  <Printer className="h-4 w-4" /> Print
+                </Button>
+                <Button
+                  onClick={downloadExcel}
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 shadow-sm text-white h-9 text-xs gap-1.5"
+                >
+                  <FileDown className="h-4 w-4" /> Download Excel
+                </Button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-
-
-      {/* Interactive Filters Panel */}
-      <Card className="border-none shadow-md bg-white/70 backdrop-blur-sm print:hidden">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
-
-            <div className="space-y-2 col-span-1">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Delivery Start Date</Label>
-              <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200 bg-white shadow-sm", !startDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-24 bg-white">
+              <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+              <p className="text-gray-500 text-sm font-semibold">Aggregating delivery status metrics...</p>
             </div>
-
-            <div className="space-y-2 col-span-1">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Delivery End Date</Label>
-              <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200 bg-white shadow-sm", !endDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-2 col-span-1">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Select Route</Label>
-              <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
-                <SelectTrigger className="w-full h-11 border-gray-200 bg-white shadow-sm">
-                  <SelectValue placeholder="All Routes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Routes</SelectItem>
-                  {routes.map(route => (
-                    <SelectItem key={route.id} value={route.id}>{route.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2 col-span-1">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Delivery Outcomes</Label>
-              <Select value={selectedDeliveryStatus} onValueChange={setSelectedDeliveryStatus}>
-                <SelectTrigger className="w-full h-11 border-gray-200 bg-white shadow-sm">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Outcomes</SelectItem>
-                  <SelectItem value="DELIVERED">Delivered</SelectItem>
-                  <SelectItem value="NOT_DELIVERED">Not Delivered</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="col-span-1">
-              <Button
-                onClick={handleResetFilters}
-                variant="outline"
-                className="h-11 px-6 text-gray-500 hover:text-primary transition-colors border-gray-200 bg-white w-full"
-              >
-                <RotateCcw className="h-4 w-4 mr-2" /> Reset Filters
-              </Button>
-            </div>
-
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Table Segment */}
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-white rounded-xl shadow-md border border-gray-100">
-          <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-          <p className="text-gray-500 font-semibold">Aggregating delivery status metrics...</p>
-        </div>
-      ) : (
-        <section className="space-y-4">
-          <div className="rounded-xl border border-gray-100 shadow-md overflow-x-auto bg-white w-full">
-            <Table className="min-w-[1150px]">
-              <TableHeader className="bg-gray-50">
-                <TableRow>
-                  <TableHead className="font-bold text-gray-900 py-4 pl-6 w-[140px]">Order Number</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 w-[220px]">Customer Name</TableHead>
-                  <TableHead className="text-center font-bold text-gray-900 py-4 w-[110px]">No. of Items</TableHead>
-                  <TableHead className="text-right font-bold text-gray-900 py-4 w-[110px]">Amt</TableHead>
-                  <TableHead className="text-right font-bold text-gray-900 py-4 w-[110px]">COD</TableHead>
-                  <TableHead className="text-right font-bold text-gray-900 py-4 w-[110px]">Online</TableHead>
-                  <TableHead className="text-right font-bold text-gray-900 py-4 w-[130px]">QR Payment</TableHead>
-                  <TableHead className="text-center font-bold text-gray-900 py-4 w-[140px]">COD/Online</TableHead>
-                  <TableHead className="text-center font-bold text-gray-900 py-4 pr-6 w-[180px]">Delivered / Not Delivered</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[1150px]">
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead className="font-bold text-gray-900 py-4 pl-6 w-[140px]">Order Number</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 w-[220px]">Customer Name</TableHead>
+                    <TableHead className="text-center font-bold text-gray-900 py-4 w-[110px]">No. of Items</TableHead>
+                    <TableHead className="text-right font-bold text-gray-900 py-4 w-[110px]">Amt</TableHead>
+                    <TableHead className="text-right font-bold text-gray-900 py-4 w-[110px]">COD</TableHead>
+                    <TableHead className="text-right font-bold text-gray-900 py-4 w-[110px]">Online</TableHead>
+                    <TableHead className="text-right font-bold text-gray-900 py-4 w-[130px]">QR Payment</TableHead>
+                    <TableHead className="text-center font-bold text-gray-900 py-4 w-[140px]">COD/Online</TableHead>
+                    <TableHead className="text-center font-bold text-gray-900 py-4 pr-6 w-[180px]">Delivered / Not Delivered</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                 {filteredData.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="h-36 text-center text-gray-500">
@@ -703,8 +685,9 @@ export default function RouteWiseDeliveryReportPage() {
               </div>
             )}
           </div>
-        </section>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Print Styles */}
       <style jsx global>{`

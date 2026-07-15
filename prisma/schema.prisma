@@ -13,6 +13,7 @@ model Customer {
   name                        String?
   razorpayCustomerId          String?
   depositWalletBalance        Float                        @default(0)
+  orderWalletBalance          Float                        @default(0)
   cansInHand                  Int                          @default(0)
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
@@ -48,7 +49,8 @@ model WalletTransaction {
   customerId    String
   amount        Float // Positive for credit, negative for debit
   type          String // CREDIT, DEBIT
-  referenceType String // ORDER, MANUAL_ADJUSTMENT, REFUND
+  walletType    String   @default("DEPOSIT") // DEPOSIT or ORDER
+  referenceType String // ORDER, MANUAL_ADJUSTMENT, REFUND, ORDER_EDIT, ORDER_CANCELLED
   referenceId   String? // ID of the order or other reference
   description   String?
   createdAt     DateTime @default(now())
@@ -56,6 +58,31 @@ model WalletTransaction {
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
+  @@index([createdAt])
+  @@index([walletType])
+}
+
+model OrderEditLog {
+  id                  String   @id @default(cuid())
+  orderId             String
+  adminId             String?
+  editType            String   // QUANTITY_CHANGE, ITEM_ADDED, ITEM_REMOVED, ITEMS_EDITED
+  oldSnapshot         Json     // items before edit
+  newSnapshot         Json     // items after edit
+  oldAmount           Int      // paise
+  newAmount           Int      // paise
+  amountDiff          Int      // newAmount - oldAmount (negative = reduction)
+  depositDiff         Int      @default(0)
+  codAmountAdded      Int      @default(0)
+  orderWalletCredit   Int      @default(0)
+  depositWalletCredit Int      @default(0)
+  description         String?
+  createdAt           DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([adminId])
   @@index([createdAt])
 }
 
@@ -100,19 +127,21 @@ model Order {
   paymentMethod      PaymentMethod
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
-  amount             Int
-  depositAmount      Int           @default(0)
-  additionalQuantity Int?
-  originalQuantity   Int?
-  paymentInstrument  String?
-  isQrPayment        Boolean       @default(false)
-  address            Address       @relation(fields: [addressId], references: [id])
-  customer           Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  product            Product?      @relation(fields: [productId], references: [id])
-  items              OrderItem[]
-  payments           Payment[]
-  routeOrders        RouteOrder[]
-  activityLogs       OrderActivityLog[]
+  amount              Int
+  depositAmount       Int           @default(0)
+  additionalQuantity  Int?
+  originalQuantity    Int?
+  paymentInstrument   String?
+  isQrPayment         Boolean       @default(false)
+  codAdjustmentAmount Int           @default(0) // Extra COD added by admin item edits (paise)
+  address             Address       @relation(fields: [addressId], references: [id])
+  customer            Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product             Product?      @relation(fields: [productId], references: [id])
+  items               OrderItem[]
+  payments            Payment[]
+  routeOrders         RouteOrder[]
+  activityLogs        OrderActivityLog[]
+  editLogs            OrderEditLog[]
 
   @@index([createdAt])
   @@index([deliveryDate])
@@ -169,6 +198,7 @@ model DeliveryBoy {
   currentStaffRoutes ServiceRoute[] @relation("CurrentStaff")
 
   returnRequests ReturnCanRequest[]
+  attendanceLogs AttendanceLog[]
 
   adminId String?
   admin   Admin?  @relation(fields: [adminId], references: [id])
@@ -212,9 +242,12 @@ model DepositRefundRequest {
   upiId         String?
   accountNumber String?
   ifscCode      String?
-  bankName      String?
-  transactionId String?
-  addressId     String?
+  bankName          String?
+  accountHolderName String?
+  transactionId  String?
+  sendingAccount String?             // Source account used for refund (e.g. 'Razorpay Balance', 'Sabols GPay')
+  sentAt         DateTime?           // Timestamp when refund payment was sent
+  addressId      String?
   date          DateTime            @default(now())
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -232,6 +265,7 @@ model DepositRefundRequest {
 enum DepositRefundStatus {
   REQUESTED
   PAID
+  PROCESSING
   REJECTED
 }
 
@@ -302,6 +336,7 @@ model RouteShift {
   pausedAt   DateTime?
   resumedAt  DateTime?
   endedAt    DateTime?
+  coworkers  Json?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   route      Route       @relation(fields: [routeId], references: [id], onDelete: Cascade)
@@ -440,6 +475,7 @@ model Admin {
   updatedAt    DateTime   @updatedAt
 
   deliveryBoyProfiles DeliveryBoy[]
+  employee            Employee?
 
   @@index([email])
   @@index([username])
@@ -453,6 +489,22 @@ model AdminRole {
   admins      Admin[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Employee {
+  id            String   @id @default(cuid())
+  employeeCode  String   @unique
+  name          String
+  mobile        String
+  email         String   @unique
+  address       String?
+  dateOfJoining DateTime
+  active        Boolean  @default(true)
+  adminId       String?  @unique
+  admin         Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  attendanceLogs AttendanceLog[]
 }
 
 model ServiceArea {
@@ -599,5 +651,42 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([actorId])
   @@index([createdAt])
+}
+
+model AttendanceLocation {
+  id             String           @id @default(cuid())
+  name           String
+  latitude       Float
+  longitude      Float
+  radiusMeters   Float
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  attendanceLogs AttendanceLog[]
+}
+
+model AttendanceLog {
+  id                   String              @id @default(cuid())
+  deliveryBoyId        String?
+  employeeId           String?
+  employeeCode         String?
+  employeeName         String?
+  attendanceLocationId String?
+  latitude             Float
+  longitude            Float
+  punchType            String              @default("CHECK_IN")
+  deviceInfo           String?
+  date                 DateTime
+  isLate               Boolean             @default(false)
+  punchedAt            DateTime            @default(now())
+  deliveryBoy          DeliveryBoy?        @relation(fields: [deliveryBoyId], references: [id], onDelete: SetNull)
+  employee             Employee?           @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  attendanceLocation   AttendanceLocation? @relation(fields: [attendanceLocationId], references: [id])
+
+  @@index([deliveryBoyId])
+  @@index([employeeId])
+  @@index([punchedAt])
+  @@index([date])
+  @@index([attendanceLocationId])
 }
 

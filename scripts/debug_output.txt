@@ -1,6 +1,42 @@
-Searching for all customers matching partial ID: c6afc10d
-Found 1 customers:
+Searching for customer with partial ID: 9791357343
+Customer Details: {
+  "id": "d28af749-e711-4485-9bce-91cfe73be1bc",
+  "name": "Mani",
+  "phone": "+919791357343",
+  "cansInHand": 5,
+  "depositWalletBalance": 1600
+}
+Found 8 orders:
+ID: 340157bb-4eae-41c0-aafe-ab1089fe81af, Status: CONFIRMED, PaymentStatus: SUCCESS, Method: ONLINE, Created: Sat Jul 11 2026 12:57:02 GMT+0530 (India Standard Time)
+ID: 55d772e5-e676-458c-a662-9bf2e193773c, Status: PENDING, PaymentStatus: PENDING, Method: ONLINE, Created: Sat Jul 11 2026 12:56:49 GMT+0530 (India Standard Time)
+ID: fc677f57-e60d-4d87-9ff3-b72b9d4f8284, Status: CONFIRMED, PaymentStatus: SUCCESS, Method: ONLINE, Created: Sat Jul 11 2026 12:27:30 GMT+0530 (India Standard Time)
+ID: e70bb790-b5ec-4aae-a7aa-9a3f5e13ec76, Status: CONFIRMED, PaymentStatus: COD, Method: COD, Created: Sat Jul 11 2026 12:14:56 GMT+0530 (India Standard Time)
+ID: bda3f5fc-30ed-4cd7-bd25-3bac848b7386, Status: PENDING, PaymentStatus: PENDING, Method: ONLINE, Created: Sat Jul 11 2026 12:12:19 GMT+0530 (India Standard Time)
+ID: 7ab7888c-e9c1-4176-8493-6fee552400fa, Status: DELIVERED, PaymentStatus: SUCCESS, Method: COD, Created: Sat Jul 11 2026 10:22:01 GMT+0530 (India Standard Time)
+ID: d284a655-c364-47b9-bccf-f6547773fdb9, Status: DELIVERED, PaymentStatus: SUCCESS, Method: COD, Created: Sat Jul 11 2026 10:12:46 GMT+0530 (India Standard Time)
+ID: 1ea7ff54-695b-4e26-9a7f-716be4e7266b, Status: DELIVERED, PaymentStatus: SUCCESS, Method: COD, Created: Sat Jul 11 2026 09:50:59 GMT+0530 (India Standard Time)
+EditLog: ID: bfe31d3d-fd33-496b-9bb2-1073ba845bb9, OrderId: 340157bb-4eae-41c0-aafe-ab1089fe81af, OldAmt: 116002, NewAmt: 136002, AmtDiff: 20000, DepDiff: 20000, CodAdded: 0
+EditLog: ID: b6286109-dea2-41ef-a122-b01796f0d9a3, OrderId: 340157bb-4eae-41c0-aafe-ab1089fe81af, OldAmt: 87002, NewAmt: 116002, AmtDiff: 29000, DepDiff: 20000, CodAdded: 9000
+EditLog: ID: b7837892-9de0-45e4-a765-3ae72fd66d76, OrderId: fc677f57-e60d-4d87-9ff3-b72b9d4f8284, OldAmt: 38001, NewAmt: 9001, AmtDiff: -29000, DepDiff: -20000, CodAdded: 0
+EditLog: ID: 0439bf5a-66c6-4dc0-8908-7e472c848ad1, OrderId: fc677f57-e60d-4d87-9ff3-b72b9d4f8284, OldAmt: 67002, NewAmt: 38001, AmtDiff: -29001, DepDiff: -20000, CodAdded: 0
+EditLog: ID: f3ea5404-003d-477a-96ec-f5e28c7c788c, OrderId: 7ab7888c-e9c1-4176-8493-6fee552400fa, OldAmt: 65003, NewAmt: 47002, AmtDiff: -18001, DepDiff: 0, CodAdded: 0
+Active Order ID: fc677f57-e60d-4d87-9ff3-b72b9d4f8284, Num: 26000012, Status: CONFIRMED, Pay: SUCCESS, Amt: 9001, Dep: 0
+  Item: Water Can 20L, Qty: 1, Ret: 1, Price: 85.72, GST: 5
+Active Order ID: 55d772e5-e676-458c-a662-9bf2e193773c, Num: 26000013, Status: PENDING, Pay: PENDING, Amt: 58000, Dep: 60000
+  Item: Water Can 20L, Qty: 3, Ret: 0, Price: 85.72, GST: 5
+Active Order ID: 340157bb-4eae-41c0-aafe-ab1089fe81af, Num: 26000014, Status: CONFIRMED, Pay: SUCCESS, Amt: 136002, Dep: 100000
+  Item: Water Can 20L, Qty: 4, Ret: 0, Price: 85.72, GST: 5
+Active Order ID: bda3f5fc-30ed-4cd7-bd25-3bac848b7386, Num: 26000010, Status: PENDING, Pay: PENDING, Amt: 134100, Dep: 0
+  Item: Pet Bottle - 300ml, Qty: 3, Ret: 0, Price: 157.14, GST: 5
+  Item: Pet Bottle - 500ml, Qty: 3, Ret: 0, Price: 182.86, GST: 5
+  Item: Water Can 20L, Qty: 3, Ret: 3, Price: 85.72, GST: 5
+Active Order ID: e70bb790-b5ec-4aae-a7aa-9a3f5e13ec76, Num: 26000011, Status: CONFIRMED, Pay: COD, Amt: 36000, Dep: 0
+  Item: Water Can 20L, Qty: 4, Ret: 4, Price: 85.72, GST: 5
 
-Customer: Abish (e0fba386-c761-4377-b486-7c0cc6afc10d)
-Phone: +916381823698, Active: true, Cans: 3, Balance: 60
-Refunds: 0
+Simulating API Active Orders Query:
+API Query result count: 3
+Matched Row: {"id":"fc677f57-e60d-4d87-9ff3-b72b9d4f8284","status":"CONFIRMED","paymentMethod":"ONLINE","paymentStatus":"SUCCESS"}
+Matched Row: {"id":"340157bb-4eae-41c0-aafe-ab1089fe81af","status":"CONFIRMED","paymentMethod":"ONLINE","paymentStatus":"SUCCESS"}
+Matched Row: {"id":"e70bb790-b5ec-4aae-a7aa-9a3f5e13ec76","status":"CONFIRMED","paymentMethod":"COD","paymentStatus":"COD"}
+
+FAILURE: API query matches these rows, causing the blockage.

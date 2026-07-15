@@ -504,7 +504,10 @@ export default function CartPage() {
   const subtotal = calculateSubtotal();
   const gst = calculateGST();
   const depositInfo = calculateDeposit();
-  const total = calculateTotal(subtotal, gst, depositInfo.toPay);
+  const grossTotal = calculateTotal(subtotal, gst, depositInfo.toPay);
+  const orderWalletAvailable = customer?.orderWalletBalance || 0;
+  const orderWalletApplied = Math.min(orderWalletAvailable, grossTotal);
+  const total = grossTotal - orderWalletApplied;
   const totalQuantity = getTotalQuantity();
 
   return (
@@ -669,10 +672,19 @@ export default function CartPage() {
                                 )}
                               </div>
                             </div>
-                            {depositInfo.toPay > 0 && item.returnQuantity < item.quantity && (
+                            {depositInfo.toPay > 0 && (
                               <div className="mt-3 pt-3 border-t border-cyan-200">
                                 <p className="text-xs sm:text-sm text-amber-600 font-medium">
-                                  Note: ₹{item.depositAmount.toFixed(2)} per new can applicable for {item.quantity - item.returnQuantity} {item.unit}{item.quantity - item.returnQuantity > 1 ? 's' : ''}
+                                  {(() => {
+                                    const netNew = Math.max(0, item.quantity - item.returnQuantity);
+                                    const totalRequired = depositInfo.cansRequiringDeposit;
+                                    const previousDeficit = Math.max(0, totalRequired - netNew);
+                                    
+                                    if (previousDeficit > 0) {
+                                      return `Note: ₹${item.depositAmount.toFixed(2)} per can. (For ${netNew} new ${item.unit}${netNew !== 1 ? 's' : ''} + ${previousDeficit} previous unpaid ${item.unit}${previousDeficit !== 1 ? 's' : ''})`;
+                                    }
+                                    return `Note: ₹${item.depositAmount.toFixed(2)} per new can applicable for ${netNew} ${item.unit}${netNew !== 1 ? 's' : ''}`;
+                                  })()}
                                 </p>
                               </div>
                             )}
@@ -776,7 +788,15 @@ export default function CartPage() {
                       </p>
                     </div>
                   )}
-                  <div className="flex justify-between text-base sm:text-lg font-bold  border-t pt-3">
+
+                  {orderWalletApplied > 0 && (
+                    <div className="flex justify-between text-sm sm:text-base bg-green-50 p-2 rounded border border-green-100">
+                      <span className="font-medium text-green-700">Order Wallet Applied</span>
+                      <span className="font-semibold text-green-700">-₹{orderWalletApplied.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-base sm:text-lg font-bold border-t pt-3">
                     <span>Total</span>
                     <span className="text-black">₹{Math.round(total)}</span>
                   </div>

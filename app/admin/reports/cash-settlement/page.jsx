@@ -370,186 +370,181 @@ export default function CashSettlementReportPage() {
       toast.error('Failed to generate print document');
     }
   };
-
   return (
     <div className="space-y-6 w-full pb-10">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-            Daily Cash Settlement Report
-          </h1>
-          <p className="text-gray-500 mt-1">Reconcile route collections, can deposits, online sales, and net cash-in-hand figures.</p>
-        </div>
-        {!isLoading && reportData.length > 0 && hasPermission('export_cash_settlement_reports') && (
-          <div className="flex gap-3 print:hidden mt-4 md:mt-0">
+      <Card className="border border-slate-200 shadow-sm bg-white">
+        <CardHeader className="border-b flex flex-col lg:flex-row lg:items-center justify-between gap-4 py-4 print:hidden">
+          <CardTitle className="text-lg font-semibold text-slate-800 shrink-0">Cash Settlement</CardTitle>
+
+          {/* Filters & Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Start Date */}
+              <div className="relative w-full sm:w-44">
+                <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !startDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{startDate ? format(startDate, "dd-MM-yyyy") : <span>Start Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* End Date */}
+              <div className="relative w-full sm:w-44">
+                <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !endDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{endDate ? format(endDate, "dd-MM-yyyy") : <span>End Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* Reset Filters */}
             <Button
-              onClick={handlePrint}
               variant="outline"
-              className="bg-white hover:bg-gray-50 text-gray-700 border-gray-300 shadow-sm transition-all hover:scale-[1.02] gap-2 h-11 px-5 hidden sm:flex"
+              size="sm"
+              onClick={handleResetFilters}
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 text-xs h-9 shrink-0 px-3"
             >
-              <Printer className="h-5 w-5" /> Print
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset
             </Button>
-            <Button
-              onClick={downloadExcel}
-              className="bg-emerald-600 hover:bg-emerald-700 shadow-md transition-all hover:scale-[1.02] text-white gap-2 h-11 px-5"
-            >
-              <FileDown className="h-5 w-5" /> Export Excel
-            </Button>
-          </div>
-        )}
-      </div>
-    
-      {/* Date Filtering Panel */}
-      <Card className="border-none shadow-sm bg-white/80 backdrop-blur-sm print:hidden">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Delivered Start Date</Label>
-              <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal h-11 border-gray-200 bg-white shadow-sm">
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Delivered End Date</Label>
-              <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal h-11 border-gray-200 bg-white shadow-sm">
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                onClick={handleResetFilters}
-                variant="outline"
-                className="h-11 px-6 text-gray-500 hover:text-primary transition-colors border-gray-200 bg-white w-full"
-              >
-                <RotateCcw className="h-4 w-4 mr-2" /> Reset
-              </Button>
-            </div>
+            {/* Print & Export buttons */}
+            {!isLoading && reportData.length > 0 && hasPermission('export_cash_settlement_reports') && (
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  onClick={handlePrint}
+                  variant="outline"
+                  size="sm"
+                  className="bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm h-9 text-xs gap-1.5"
+                >
+                  <Printer className="h-4 w-4" /> Print
+                </Button>
+                <Button
+                  onClick={downloadExcel}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 shadow-sm text-white h-9 text-xs gap-1.5"
+                >
+                  <FileDown className="h-4 w-4" /> Export Excel
+                </Button>
+              </div>
+            )}
           </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-24 bg-white">
+              <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+              <p className="text-gray-500 text-sm font-semibold">Generating cash settlement data...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-16 bg-white text-center">
+              <Badge className="bg-red-50 text-red-700 border-red-200 text-sm font-bold mb-2">Error</Badge>
+              <p className="text-gray-600 font-medium px-4 text-sm">{error}</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-gray-50 border-b border-gray-200">
+                  <TableRow>
+                    <TableHead className="font-bold text-gray-900 py-4 text-center w-[80px]">S.NO</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 pl-6 text-left">DESCRIPTION</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">CASH SALES</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">CASH DEPOSIT</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[160px]">ONLINE PAYMENT</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[150px]">ONLINE DEPOSIT</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[160px]">QR PAYMENT</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">QR DEPOSIT</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[160px]">CASH IN HAND</TableHead>
+                    <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">TOTAL SALES</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="h-36 text-center text-gray-500 font-medium">
+                        No records found for the selected dates.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <>
+                      {reportData.map((item, idx) => (
+                        <TableRow key={item.routeId || idx} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100">
+                          <TableCell className="text-center font-semibold text-gray-400 py-4">
+                            {idx + 1}
+                          </TableCell>
+                          <TableCell className="font-bold text-gray-800 pl-6 text-left">
+                            {item.routeName}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-gray-800 pr-6">
+                            ₹{Math.round(item.cashSales).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right text-gray-600 font-bold pr-6">
+                            ₹{Math.round(item.cashDeposit || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right text-gray-600 font-bold pr-6">
+                            ₹{Math.round(item.officeGpay).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right text-gray-600 font-bold pr-6">
+                            ₹{Math.round(item.officeGpayDeposit || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right text-gray-600 font-bold pr-6">
+                            ₹{Math.round(item.qrPayment).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right text-gray-600 font-bold pr-6">
+                            ₹{Math.round(item.qrDeposit || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-extrabold text-gray-800 pr-6 bg-emerald-50/10">
+                            ₹{Math.round(item.cashInHand).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-extrabold text-gray-900 pr-6">
+                            ₹{Math.round(item.totalSales).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+
+                      {/* Table Grand Totals Row */}
+                      <TableRow className="bg-gray-100/70 border-t-2 border-t-gray-300 border-b-4 border-b-double border-b-gray-400 font-extrabold text-gray-900 text-sm">
+                        <TableCell className="text-center"></TableCell>
+                        <TableCell className="text-left font-extrabold pl-6 py-4 tracking-wider">TOTAL</TableCell>
+                        <TableCell className="text-right pr-6">₹{Math.round(grandTotals.cashSales).toLocaleString()}</TableCell>
+                        <TableCell className="text-right pr-6">₹{Math.round(grandTotals.cashDeposit).toLocaleString()}</TableCell>
+                        <TableCell className="text-right pr-6">₹{Math.round(grandTotals.officeGpay).toLocaleString()}</TableCell>
+                        <TableCell className="text-right pr-6">₹{Math.round(grandTotals.officeGpayDeposit).toLocaleString()}</TableCell>
+                        <TableCell className="text-right pr-6">₹{Math.round(grandTotals.qrPayment).toLocaleString()}</TableCell>
+                        <TableCell className="text-right pr-6">₹{Math.round(grandTotals.qrDeposit).toLocaleString()}</TableCell>
+                        <TableCell className="text-right pr-6 text-emerald-950 bg-emerald-50/20 font-black">₹{Math.round(grandTotals.cashInHand).toLocaleString()}</TableCell>
+                        <TableCell className="text-right pr-6 text-gray-950">₹{Math.round(grandTotals.totalSales).toLocaleString()}</TableCell>
+                      </TableRow>
+                    </>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Main Aggregations Table */}
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-white rounded-xl shadow-sm border border-gray-100">
-          <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-          <p className="text-gray-500 font-semibold">Generating cash settlement data...</p>
-        </div>
-      ) : error ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl shadow-sm border border-red-100 text-center">
-          <Badge className="bg-red-50 text-red-700 border-red-200 text-md font-bold mb-2">Error</Badge>
-          <p className="text-gray-600 font-medium px-4">{error}</p>
-        </div>
-      ) : (
-        <section className="space-y-4">
-          <div className="rounded-xl border border-gray-100 shadow-sm overflow-hidden bg-white w-full">
-            <Table>
-              <TableHeader className="bg-gray-50 border-b border-gray-200">
-                <TableRow>
-                  <TableHead className="font-bold text-gray-900 py-4 text-center w-[80px]">S.NO</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 pl-6 text-left">DESCRIPTION</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">CASH SALES</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">CASH DEPOSIT</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[160px]">ONLINE PAYMENT </TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[150px]">ONLINE DEPOSIT</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[160px]">QR PAYMENT</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">QR DEPOSIT</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[160px]">CASH IN HAND</TableHead>
-                  <TableHead className="font-bold text-gray-900 py-4 text-right pr-6 w-[140px]">TOTAL SALES</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reportData.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="h-36 text-center text-gray-500 font-medium">
-                      No records found for the selected dates.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <>
-                    {reportData.map((item, idx) => (
-                      <TableRow key={item.routeId || idx} className="hover:bg-gray-50/50 transition-colors border-b border-gray-100">
-                        <TableCell className="text-center font-semibold text-gray-400 py-4">
-                          {idx + 1}
-                        </TableCell>
-                        <TableCell className="font-bold text-gray-800 pl-6 text-left">
-                          {item.routeName}
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-gray-800 pr-6">
-                          ₹{Math.round(item.cashSales).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right text-gray-600 font-bold pr-6">
-                          ₹{Math.round(item.cashDeposit || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right text-gray-600 font-bold pr-6">
-                          ₹{Math.round(item.officeGpay).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right text-gray-600 font-bold pr-6">
-                          ₹{Math.round(item.officeGpayDeposit || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right text-gray-600 font-bold pr-6">
-                          ₹{Math.round(item.qrPayment).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right text-gray-600 font-bold pr-6">
-                          ₹{Math.round(item.qrDeposit || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-extrabold text-gray-800 pr-6 bg-emerald-50/10">
-                          ₹{Math.round(item.cashInHand).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-extrabold text-gray-900 pr-6">
-                          ₹{Math.round(item.totalSales).toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-
-                    {/* Table Grand Totals Row */}
-                    <TableRow className="bg-gray-100/70 border-t-2 border-t-gray-300 border-b-4 border-b-double border-b-gray-400 font-extrabold text-gray-900 text-sm">
-                      <TableCell className="text-center"></TableCell>
-                      <TableCell className="text-left font-extrabold pl-6 py-4 tracking-wider">TOTAL</TableCell>
-                      <TableCell className="text-right pr-6 ">₹{Math.round(grandTotals.cashSales).toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6">₹{Math.round(grandTotals.cashDeposit).toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6">₹{Math.round(grandTotals.officeGpay).toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6">₹{Math.round(grandTotals.officeGpayDeposit).toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6">₹{Math.round(grandTotals.qrPayment).toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6">₹{Math.round(grandTotals.qrDeposit).toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6 text-emerald-950 bg-emerald-50/20 font-black">₹{Math.round(grandTotals.cashInHand).toLocaleString()}</TableCell>
-                      <TableCell className="text-right pr-6 text-gray-950">₹{Math.round(grandTotals.totalSales).toLocaleString()}</TableCell>
-                    </TableRow>
-                  </>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </section>
-      )}
 
       {/* Print Styles */}
       <style jsx global>{`

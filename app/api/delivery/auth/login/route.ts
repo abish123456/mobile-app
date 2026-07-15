@@ -5,6 +5,7 @@ import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
 // @ts-ignore
 import jwt from "jsonwebtoken";
+import { generateAdminToken } from "@/lib/admin-auth";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_development_only";
 
@@ -54,60 +55,62 @@ export async function POST(req: Request) {
       );
     }
 
-    const roleNames = admin.roleNames || [];
+    // In the system, if an admin has no explicit roles, they are treated as an implicit Super Admin
+    const roleNames = (admin.roleNames && admin.roleNames.length > 0) ? admin.roleNames : ["Super Admin"];
+    const isDeliveryStaff = roleNames.includes("Delivery Staff");
+    let activeProfile = null;
+    let token = "";
 
-    // Check role to ensure they are delivery staff
-    if (!roleNames.includes("Delivery Staff")) {
-      return NextResponse.json(
-        { success: false, message: "Access denied. Only Delivery Staff can log in here." },
-        { status: 403 }
+    if (isDeliveryStaff) {
+      // Fetch linked delivery boy profiles
+      const profilesRes = await query(
+        `SELECT * FROM "DeliveryBoy" WHERE "adminId" = $1`,
+        [admin.id]
       );
-    }
+      const deliveryBoyProfiles = profilesRes.rows;
 
-    // Fetch linked delivery boy profiles
-    const profilesRes = await query(
-      `SELECT * FROM "DeliveryBoy" WHERE "adminId" = $1`,
-      [admin.id]
-    );
-    const deliveryBoyProfiles = profilesRes.rows;
+      // Ensure they have a linked DeliveryBoy profile
+      if (deliveryBoyProfiles.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "No Delivery Boy profile linked to this account. Please contact the administrator." },
+          { status: 403 }
+        );
+      }
 
-    // Ensure they have a linked DeliveryBoy profile
-    if (deliveryBoyProfiles.length === 0) {
-      return NextResponse.json(
-        { success: false, message: "No Delivery Boy profile linked to this account. Please contact the administrator." },
-        { status: 403 }
+      // Assume one-to-many relationship but we just grab the first active one
+      activeProfile = deliveryBoyProfiles.find(p => p.active);
+      if (!activeProfile) {
+        return NextResponse.json(
+          { success: false, message: "Your delivery profile is currently inactive." },
+          { status: 403 }
+        );
+      }
+
+      // Generate JWT Token for delivery staff
+      token = jwt.sign(
+        {
+          adminId: admin.id,
+          deliveryBoyId: activeProfile.id,
+          roles: roleNames,
+        },
+        JWT_SECRET,
+        { expiresIn: "7d" } // Token expires in 7 days
       );
+    } else {
+      // Generate Admin Token (which is in the format adminId.timestamp.hash)
+      token = generateAdminToken(admin.id);
     }
-
-    // Assume one-to-many relationship but we just grab the first active one
-    const activeProfile = deliveryBoyProfiles.find(p => p.active);
-    if (!activeProfile) {
-      return NextResponse.json(
-        { success: false, message: "Your delivery profile is currently inactive." },
-        { status: 403 }
-      );
-    }
-
-    // Generate JWT Token
-    const token = jwt.sign(
-      {
-        adminId: admin.id,
-        deliveryBoyId: activeProfile.id,
-        roles: roleNames,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" } // Token expires in 7 days
-    );
 
     return NextResponse.json({
       success: true,
       token,
       profile: {
-        id: activeProfile.id,
-        name: activeProfile.name,
-        phone: activeProfile.phone,
+        id: activeProfile ? activeProfile.id : admin.id,
+        name: activeProfile ? activeProfile.name : (admin.name || admin.username),
+        phone: activeProfile ? activeProfile.phone : null,
         email: admin.email,
-        username: admin.username
+        username: admin.username,
+        roles: roleNames
       }
     });
   } catch (error) {

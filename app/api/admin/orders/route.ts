@@ -295,6 +295,7 @@ export async function GET(req: NextRequest) {
       longitude: number | null;
       notDeliveredReason: string | null;
       isQrPayment: boolean;
+      walletAmountApplied: number | null;
     }>(
       `SELECT
         o."id",
@@ -305,6 +306,14 @@ export async function GET(req: NextRequest) {
         o."amount",
         o."deliveryDate",
         o."deliverySlot",
+        COALESCE(
+          (SELECT wt."amount"
+           FROM "WalletTransaction" wt
+           WHERE wt."referenceId" = o."id"
+             AND wt."walletType" = 'ORDER'
+             AND wt."type" = 'DEBIT'
+           LIMIT 1), 0
+        ) as "walletAmountApplied",
         o."status",
         o."paymentStatus",
         o."paymentMethod",
@@ -419,7 +428,7 @@ export async function GET(req: NextRequest) {
     const orders = ordersRes.rows.map((order) => {
       // Use stored amount (all new orders have amount stored)
       // For old orders without amount, return 0
-      const amountInRupees = order.amount ? order.amount / 100 : 0;
+      const amountInRupees = order.amount ? Math.round(order.amount / 100) : 0;
 
       const createdAtISO = order.createdAt.toISOString();
       const createdAtIST = formatDateIST(order.createdAt, {
@@ -448,7 +457,9 @@ export async function GET(req: NextRequest) {
         deliverySlot: order.deliverySlot,
         status: order.status,
         paymentStatus: order.paymentStatus,
-        paymentMethod: order.paymentMethod,
+        paymentMethod: Number(order.walletAmountApplied || 0) > 0
+          ? (amountInRupees === 0 ? 'WALLET' : `WALLET + ${order.paymentMethod}`)
+          : order.paymentMethod,
         paymentInstrument: order.paymentInstrument,
         isQrPayment: order.isQrPayment,
         createdAt: createdAtISO,
@@ -456,6 +467,7 @@ export async function GET(req: NextRequest) {
         deliveredAt: order.status === 'DELIVERED' && order.deliveredAt ? order.deliveredAt.toISOString() : null,
         deliveredAtIST: deliveredAtIST,
         amount: amountInRupees,
+        walletAmountApplied: Number(order.walletAmountApplied || 0),
         customer: {
           name: order.customerName || "Unknown",
           phone: order.customerPhone,

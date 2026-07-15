@@ -196,37 +196,32 @@ export default function ServiceAreasPage() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold">Service Areas</h1>
-                    <p className="text-muted-foreground">Manage pincodes where you provide delivery</p>
-                </div>
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="relative flex-1 md:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search pincode or area..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-9"
-                        />
-                    </div>
-                    {hasPermission('create_service_areas') && (
-                        <Button onClick={() => handleOpenDialog(null)}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Service Area
-                        </Button>
-                    )}
-                </div>
-            </div>
-
+        <div className="space-y-4">
             <Card>
-                <CardHeader>
-                    <CardTitle>Supported Pincodes</CardTitle>
-                    <CardDescription>
-                        Only addresses with these pincodes will be able to place orders.
-                    </CardDescription>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
+                    <div>
+                        <CardTitle>Supported Pincodes</CardTitle>
+                        <CardDescription>
+                            Only addresses with these pincodes will be able to place orders.
+                        </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="relative flex-1 sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search pincode or area..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                        {hasPermission('create_service_areas') && (
+                            <Button onClick={() => handleOpenDialog(null)}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Service Area
+                            </Button>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -272,29 +267,28 @@ export default function ServiceAreasPage() {
                                                     )}
                                                 </TableCell>
                                                 {(hasPermission('edit_service_areas') || hasPermission('delete_service_areas')) && (
-                                                    <TableCell >
-                                                        <div>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
                                                             {hasPermission('edit_service_areas') && (
                                                                 <Button
                                                                     variant="ghost"
-                                                                    size="icon"
+                                                                    size="icon-xs"
                                                                     onClick={() => handleOpenDialog(area)}
-                                                                    className="h-8 w-8"
                                                                 >
-                                                                    <Edit className="h-4 w-4" />
+                                                                    <Edit className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             )}
                                                             {hasPermission('delete_service_areas') && (
                                                                 <Button
                                                                     variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-destructive hover:text-black"
+                                                                    size="icon-xs"
+                                                                    className="text-destructive hover:text-black"
                                                                     onClick={() => {
                                                                         setSelectedArea(area);
                                                                         setIsDeleteDialogOpen(true);
                                                                     }}
                                                                 >
-                                                                    {/* <Trash2 className="h-4 w-4" /> */}
+                                                                    {/* <Trash2 className="h-3.5 w-3.5" /> */}
                                                                 </Button>
                                                             )}
                                                         </div>

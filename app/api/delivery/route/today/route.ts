@@ -102,6 +102,7 @@ export async function GET(req: NextRequest) {
         o."paymentStatus" as "orderPaymentStatus",
         o."paymentMethod" as "orderPaymentMethod",
         o."status" as "orderStatus",
+        o."codAdjustmentAmount" as "orderCodAdjustmentAmount",
         o."createdAt" as "orderCreatedAt",
         c."id" as "customerId",
         c."name" as "customerName",

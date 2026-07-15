@@ -44,6 +44,8 @@ import {
   Phone,
   FileSearch2,
   ShieldCheck,
+  Wallet,
+  ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { SidebarTrigger, useSidebar } from '../ui/sidebar';
@@ -120,11 +122,23 @@ const ALL_MENU_ITEMS = [
         icon: Users,
         permission: 'view_delivery_staff'
       },
+      // {
+      //   title: 'Employee Master',
+      //   url: '/admin/employees',
+      //   icon: UserPlus,
+      //   permission: 'view_employees'
+      // },
       {
         title: 'Delivery Reasons',
         url: '/admin/not-delivered-reasons',
         icon: RefreshCcw,
         permission: 'view_not_delivered_reasons'
+      },
+      {
+        title: 'Attendance Locations',
+        url: '/admin/settings/locations',
+        icon: MapPin,
+        permission: 'view_attendance_locations'
       },
     ]
   },
@@ -211,10 +225,22 @@ const ALL_MENU_ITEMS = [
         permission: 'view_deposit_reports'
       },
       {
+        title: 'Order Wallet Report',
+        url: '/admin/reports/order-wallet',
+        icon: Wallet,
+        permission: 'view_order_wallet_reports'
+      },
+      {
         title: 'Product Sales',
         url: '/admin/reports/product-sales',
         icon: Package,
         permission: 'view_product_sales_reports'
+      },
+      {
+        title: 'Attendance Report',
+        url: '/admin/reports/attendance',
+        icon: ClipboardCheck,
+        permission: 'view_attendance_reports'
       },
     ]
   },
@@ -250,7 +276,7 @@ const ALL_MENU_ITEMS = [
   },
 ];
 
-function AdminSidebarItem({ item, pathname, isCollapsed, handleNavigate }) {
+function AdminSidebarItem({ item, pathname, isCollapsed, isMobile, handleNavigate }) {
   const hasChildren = item.children && item.children.length > 0;
   const isActive = !hasChildren
     ? (item.url === '/admin' ? pathname === '/admin' : pathname === item.url || pathname?.startsWith(item.url + '/'))
@@ -261,11 +287,13 @@ function AdminSidebarItem({ item, pathname, isCollapsed, handleNavigate }) {
   const timeoutRef = useRef(null);
 
   const handleMouseEnter = () => {
+    if (isMobile) return;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setDropdownOpen(true);
   };
 
   const handleMouseLeave = () => {
+    if (isMobile) return;
     timeoutRef.current = setTimeout(() => {
       setDropdownOpen(false);
     }, 150); // Small delay to prevent flickering
@@ -296,10 +324,11 @@ function AdminSidebarItem({ item, pathname, isCollapsed, handleNavigate }) {
       return { ...child, isChildActive, ChildIcon };
     });
 
-    if (isCollapsed) {
+    // On mobile, always use expanded accordion view (never the collapsed dropdown)
+    if (isCollapsed && !isMobile) {
       return (
         <SidebarMenuItem>
-          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen} modal={false}>
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 isActive={isActive}
@@ -320,6 +349,7 @@ function AdminSidebarItem({ item, pathname, isCollapsed, handleNavigate }) {
               sideOffset={12}
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
+              onCloseAutoFocus={(e) => e.preventDefault()}
               className="!bg-black !border-gray-800 !text-white min-w-[180px] z-[100]"
             >
               <DropdownMenuArrow className="fill-black stroke-gray-800 stroke-[1px]" />
@@ -416,8 +446,8 @@ export default function AdminSidebar() {
   const [lastUpdated, setLastUpdated] = useState('');
   const [adminPermissions, setAdminPermissions] = useState([]);
 
-  // Collapsed = icon-only rail mode
-  const isCollapsed = !open;
+  // Collapsed = icon-only rail mode (desktop only; mobile Sheet is always expanded)
+  const isCollapsed = isMobile ? false : !open;
 
   useEffect(() => {
     const syncPermissions = async () => {
@@ -520,7 +550,7 @@ export default function AdminSidebar() {
         {/* ── TOP HEADER: Logo + Collapse Toggle ── */}
         {isCollapsed ? (
           /* COLLAPSED: logo on top, expand button below — all centered */
-          <div className="flex flex-col items-center gap-2 border-b border-gray-800 py-3 px-2 shrink-0 w-full mb-2">
+          <div className="flex items-center justify-center border-b border-gray-800 h-14 px-2 shrink-0 w-full mb-2">
             <button
               type="button"
               onClick={() => setOpen(true)}
@@ -538,7 +568,7 @@ export default function AdminSidebar() {
           </div>
         ) : (
           /* EXPANDED: logo+name on left, chevron-left on right */
-          <div className="flex items-center justify-between border-b border-gray-800 py-4 px-4 shrink-0">
+          <div className="flex items-center justify-between border-b border-gray-800 h-14 px-4 shrink-0">
             <button
               onClick={() => handleNavigate('/admin')}
               className="flex items-center gap-2 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
@@ -557,7 +587,7 @@ export default function AdminSidebar() {
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => setOpen(!open)}
+                  onClick={() => isMobile ? setOpenMobile(false) : setOpen(!open)}
                   className="flex items-center justify-center h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors shrink-0"
                   aria-label="Collapse sidebar"
                 >
@@ -573,13 +603,14 @@ export default function AdminSidebar() {
 
         <SidebarGroup className="flex-1 overflow-y-auto custom-scrollbar">
           <SidebarGroupContent>
-            <SidebarMenu className={cn("pt-2", isCollapsed ? "px-1" : "px-2")}>
+            <SidebarMenu className={cn("pt-2", isCollapsed ? "px-0" : "px-2")}>
               {menuItems.map((item) => (
                 <AdminSidebarItem
                   key={item.title}
                   item={item}
                   pathname={pathname}
                   isCollapsed={isCollapsed}
+                  isMobile={isMobile}
                   handleNavigate={handleNavigate}
                 />
               ))}
@@ -588,7 +619,7 @@ export default function AdminSidebar() {
         </SidebarGroup>
 
         {/* ── BOTTOM: Logout + Last Updated ── */}
-        <div className={cn("border-t border-gray-800 p-4", isCollapsed && "flex flex-col items-center")}>
+        <div className={cn("border-t border-gray-800 p-4", isCollapsed && "flex flex-col items-center !p-2")}>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <SidebarMenuButton

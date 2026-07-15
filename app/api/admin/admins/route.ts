@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
         const adminsRes = await query(`
             SELECT a.id, a.email, a.username, a.name, a.active, a."createdAt", a."updatedAt",
                    db."phone" as "deliveryBoyPhone",
+                   e."mobile" as "employeePhone",
+                   e."employeeCode", e."dateOfJoining", e."address" as "residentialAddress",
                    COALESCE(
                      (SELECT json_agg(json_build_object('id', ar.id, 'name', ar.name))
                       FROM "AdminRole" ar
@@ -29,6 +31,7 @@ export async function GET(req: NextRequest) {
                    ) as "roles"
             FROM "Admin" a
             LEFT JOIN "DeliveryBoy" db ON db."adminId" = a.id
+            LEFT JOIN "Employee" e ON e."adminId" = a.id
             ORDER BY a."createdAt" DESC
         `);
 
@@ -60,10 +63,27 @@ export async function POST(req: NextRequest) {
         const roleIds = Array.isArray(body?.roleIds) ? body.roleIds : [];
         const active = body?.active ?? true;
         let phone = (body?.phone || "").toString().trim();
+        const employeeCode = (body?.employeeCode || "").toString().trim();
+        const dateOfJoining = body?.dateOfJoining ? new Date(body.dateOfJoining) : null;
+        const residentialAddress = (body?.residentialAddress || "").toString().trim();
+
+        if (!employeeCode) {
+            return NextResponse.json(
+                { success: false, message: "Employee Code / ID is required" },
+                { status: 400 }
+            );
+        }
 
         if (!username || !email || !password) {
             return NextResponse.json(
                 { success: false, message: "Username, email, and password are required" },
+                { status: 400 }
+            );
+        }
+
+        if (!phone || phone.length !== 10) {
+            return NextResponse.json(
+                { success: false, message: "A valid 10-digit phone number is required" },
                 { status: 400 }
             );
         }
@@ -81,6 +101,16 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        if (employeeCode) {
+            const checkEmp = await query(`SELECT id FROM "Employee" WHERE "employeeCode" = $1`, [employeeCode]);
+            if (checkEmp.rows.length > 0) {
+                return NextResponse.json(
+                    { success: false, message: "An employee with this Employee Code already exists" },
+                    { status: 400 }
+                );
+            }
+        }
+
         // Hash password (assuming simple sha256 for now, can be adjusted)
         const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
 
@@ -93,6 +123,28 @@ export async function POST(req: NextRequest) {
              RETURNING id, username, email, name, active`,
             [id, username, email, name, passwordHash, active, now, now]
         );
+
+        if (employeeCode || dateOfJoining || residentialAddress) {
+            const empId = crypto.randomUUID();
+            const empDOJ = dateOfJoining || now;
+            await query(
+                `INSERT INTO "Employee" (id, "employeeCode", name, mobile, email, address, "dateOfJoining", active, "adminId", "createdAt", "updatedAt")
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [
+                    empId, 
+                    employeeCode || `EMP-${id.slice(0, 8).toUpperCase()}`, 
+                    name || username, 
+                    phone || '', 
+                    email, 
+                    residentialAddress || null, 
+                    empDOJ, 
+                    active, 
+                    id, 
+                    now, 
+                    now
+                ]
+            );
+        }
 
         let isDeliveryStaff = false;
         const assignedRoleNames: string[] = [];

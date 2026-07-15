@@ -52,11 +52,18 @@ export async function POST(req: NextRequest) {
       customerId: string;
       paymentStatus: string;
       quantity: number;
-      amount: number | null; // Amount in paise, may be null for old orders
-      depositAmount: number | null; // Amount in paise
+      amount: number | null;
+      paidAmount: number;
+      depositAmount: number | null;
+      codAdjustmentAmount: number | null;
       deliveryDate: Date;
     }>(
-      `SELECT o."id", o."orderNumber", o."customerId", o."paymentStatus", o."quantity", o."amount", o."depositAmount", o."deliveryDate"
+      `SELECT o."id", o."orderNumber", o."customerId", o."paymentStatus", o."quantity", o."amount", o."depositAmount", o."codAdjustmentAmount", o."deliveryDate",
+        COALESCE((
+          SELECT SUM(p."amount")::bigint
+          FROM "Payment" p
+          WHERE p."orderId" = o."id" AND p."status" = 'SUCCESS'
+        ), 0) as "paidAmount"
        FROM "Order" o
        WHERE o."id" = $1 AND o."customerId" = $2`,
       [orderId, customerId]
@@ -108,7 +115,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const expectedAmount = order.amount;
+    const isAdditionalPayment = order.paymentStatus === "SUCCESS" && (order.codAdjustmentAmount || 0) > 0;
+    const rawExpectedAmount = Math.max(0, Number(order.amount || 0) - Number(order.paidAmount));
+    const expectedAmount = Math.round(rawExpectedAmount / 100) * 100;
     const actualAmount = typeof payment.amount === 'number' ? payment.amount : Number(payment.amount) || 0;
 
     if (Math.abs(actualAmount - expectedAmount) > 1) {
@@ -122,8 +131,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use transaction to ensure atomicity only if PENDING or COD
-    let alreadySuccess = order.paymentStatus !== "PENDING" && order.paymentStatus !== "COD";
+    // Use transaction to ensure atomicity only if PENDING or COD, or if this is an additional payment
+    let alreadySuccess = (order.paymentStatus !== "PENDING" && order.paymentStatus !== "COD") && !isAdditionalPayment;
 
     // Determine payment instrument
     let instrument = 'Online';
@@ -150,29 +159,50 @@ export async function POST(req: NextRequest) {
         payment.amount, // Amount in paise
         new Date(),
       ]
-    );
-
-    if (!alreadySuccess) {
+    );    if (!alreadySuccess) {
       await withTransaction(async (client) => {
-        // 2. Update order payment status and assign orderNumber if missing
-        const updateResult = await client.query(
-          `UPDATE "Order" 
-             SET "paymentStatus" = 'SUCCESS', 
-                 "status" = CASE WHEN "status" = 'CANCELLED' AND "paymentStatus" = 'FAILED' THEN 'PENDING' ELSE "status" END,
-                 "paymentInstrument" = $2, 
+        if (isAdditionalPayment) {
+          // 2. Update order for additional payment (clear codAdjustmentAmount, set method to ONLINE)
+          await client.query(
+            `UPDATE "Order" 
+             SET "codAdjustmentAmount" = 0,
                  "paymentMethod" = 'ONLINE',
-                 "updatedAt" = NOW(),
-                 "orderNumber" = COALESCE("orderNumber", (SELECT nextval('order_id_seq')::text))
-             WHERE "id" = $1 AND "paymentStatus" != 'SUCCESS'
-             RETURNING "id", "orderNumber"`,
-          [orderId, instrument]
-        );
-
-        if (updateResult.rows.length === 0) {
-          alreadySuccess = true;
-          // Order was already marked as SUCCESS by webhook or previous call
-        } else {
-          // Log action in Audit Log for the payment
+                 "updatedAt" = NOW()
+             WHERE "id" = $1`,
+            [orderId]
+          );
+          
+          // Check for depositDiff from OrderEditLog
+          const editLogRes = await client.query<{ depositDiff: number }>(
+            `SELECT "depositDiff" FROM "OrderEditLog" 
+             WHERE "orderId" = $1 AND "editType" = 'ITEMS_EDITED' 
+             ORDER BY "createdAt" DESC LIMIT 1`,
+            [orderId]
+          );
+          const depositDiff = editLogRes.rows[0]?.depositDiff || 0;
+          if (depositDiff > 0) {
+            const depositDiffRupees = depositDiff / 100;
+            await client.query(
+              `UPDATE "Customer" 
+               SET "depositWalletBalance" = COALESCE("depositWalletBalance", 0) + $1,
+                   "updatedAt" = NOW()
+               WHERE "id" = $2`,
+              [depositDiffRupees, customerId]
+            );
+            await client.query(
+              `INSERT INTO "WalletTransaction"
+                 ("id", "customerId", "amount", "type", "walletType", "referenceType", "referenceId", "description", "createdAt")
+               VALUES ($1, $2, $3, 'CREDIT', 'DEPOSIT', 'ORDER_EDIT', $4, $5, NOW())`,
+              [
+                crypto.randomUUID(),
+                customerId,
+                depositDiffRupees,
+                orderId,
+                `Additional deposit paid online for edited Order #${(order.orderNumber || orderId.slice(-8)).toUpperCase()}`
+              ]
+            );
+          }
+          
           logAction({
             actorId: customerId,
             actorType: 'CUSTOMER',
@@ -180,50 +210,85 @@ export async function POST(req: NextRequest) {
             entityId: orderId,
             action: 'UPDATE',
             newData: {
-              paymentStatus: 'SUCCESS',
+              codAdjustmentAmount: 0,
               paymentMethod: 'ONLINE',
               paymentInstrument: instrument
             },
-            description: `Payment verified and successful via Razorpay`
+            description: `Additional payment verified and successful via Razorpay`
           });
-        }
-
-        // 3. Update Customer deposit balance if this order included a deposit
-        if (order.depositAmount && order.depositAmount > 0) {
-          // Check if we already have a PAYMENT log for this order to be idempotent
-          const existingPaymentLog = await client.query(
-            `SELECT 1 FROM "WalletTransaction" 
-               WHERE "referenceId" = $1 AND "referenceType" = 'PAYMENT'`,
-            [orderId]
+          
+        } else {
+          // 2. Update order payment status and assign orderNumber if missing
+          const updateResult = await client.query(
+            `UPDATE "Order" 
+               SET "paymentStatus" = 'SUCCESS', 
+                   "status" = CASE WHEN "status" = 'CANCELLED' AND "paymentStatus" = 'FAILED' THEN 'PENDING' ELSE "status" END,
+                   "paymentInstrument" = $2, 
+                   "paymentMethod" = 'ONLINE',
+                   "updatedAt" = NOW(),
+                   "orderNumber" = COALESCE("orderNumber", (SELECT nextval('order_id_seq')::text))
+               WHERE "id" = $1 AND "paymentStatus" != 'SUCCESS'
+               RETURNING "id", "orderNumber"`,
+            [orderId, instrument]
           );
 
-          if (existingPaymentLog.rows.length === 0) {
-            const depositInRupees = order.depositAmount / 100;
+          if (updateResult.rows.length === 0) {
+            alreadySuccess = true;
+            // Order was already marked as SUCCESS by webhook or previous call
+          } else {
+            // Log action in Audit Log for the payment
+            logAction({
+              actorId: customerId,
+              actorType: 'CUSTOMER',
+              entity: 'ORDER',
+              entityId: orderId,
+              action: 'UPDATE',
+              newData: {
+                paymentStatus: 'SUCCESS',
+                paymentMethod: 'ONLINE',
+                paymentInstrument: instrument
+              },
+              description: `Payment verified and successful via Razorpay`
+            });
+          }
 
-            // Null-safe relative update
-            await client.query(
-              `UPDATE "Customer" 
-                 SET "depositWalletBalance" = COALESCE("depositWalletBalance", 0) + $1, 
-                     "updatedAt" = NOW() 
-                 WHERE "id" = $2`,
-              [depositInRupees, order.customerId]
+          // 3. Update Customer deposit balance if this order included a deposit
+          if (order.depositAmount && order.depositAmount > 0) {
+            // Check if we already have a PAYMENT log for this order to be idempotent
+            const existingPaymentLog = await client.query(
+              `SELECT 1 FROM "WalletTransaction" 
+                 WHERE "referenceId" = $1 AND "referenceType" = 'PAYMENT'`,
+              [orderId]
             );
 
-            // Log the deposit transaction
-            await client.query(
-              `INSERT INTO "WalletTransaction"
-                 ("id", "customerId", "amount", "type", "referenceType", "referenceId", "description", "createdAt")
+            if (existingPaymentLog.rows.length === 0) {
+              const depositInRupees = order.depositAmount / 100;
+
+              // Null-safe relative update
+              await client.query(
+                `UPDATE "Customer" 
+                   SET "depositWalletBalance" = COALESCE("depositWalletBalance", 0) + $1, 
+                       "updatedAt" = NOW() 
+                   WHERE "id" = $2`,
+                [depositInRupees, order.customerId]
+              );
+
+              // Log the deposit transaction
+              await client.query(
+                `INSERT INTO "WalletTransaction"
+                   ("id", "customerId", "amount", "type", "referenceType", "referenceId", "description", "createdAt")
                  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-              [
-                crypto.randomUUID(),
-                order.customerId,
-                depositInRupees,
-                'CREDIT',
-                'PAYMENT',
-                orderId,
-                `Online Deposit Payment for Order #${orderId.slice(-8).toUpperCase()}`
-              ]
-            );
+                [
+                  crypto.randomUUID(),
+                  order.customerId,
+                  depositInRupees,
+                  'CREDIT',
+                  'PAYMENT',
+                  orderId,
+                  `Online Deposit Payment for Order #${orderId.slice(-8).toUpperCase()}`
+                ]
+              );
+            }
           }
         }
       });

@@ -285,111 +285,90 @@ export default function ReassignedReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Reassigned Orders Report</h1>
-          <p className="text-gray-500 mt-1">Monitor orders that have been reassigned across routes and staff.</p>
-        </div>
-        {hasPermission('export_reassigned_orders_reports') && (
-          <Button 
-            onClick={() => setIsDownloadDialogOpen(true)} 
-            disabled={filteredOrders.length === 0 || isLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-          >
-            <Download className="mr-2 h-4 w-4" /> Download Report
-          </Button>
-        )}
-      </div>
+      <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardHeader className="bg-white border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 py-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <CardTitle className="text-lg font-semibold flex items-center text-slate-800">
+              <RefreshCcw className="mr-2 h-5 w-5 text-blue-500" />
+              Reassigned History
+            </CardTitle>
+            <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 px-3 py-0.5 text-xs font-semibold">
+              {filteredOrders.length} Orders Found
+            </Badge>
+          </div>
 
-      <Card className="border-none shadow-sm bg-white">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Date Range Selectors */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">From Date</label>
-              <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal border-gray-200",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
-                    {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(date) => {
-                      setStartDate(date);
-                      setIsStartDatePickerOpen(false);
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+          {/* Filters & Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* From Date */}
+              <div className="relative w-full sm:w-40">
+                <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !startDate && "text-muted-foreground")}
+                    >
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{startDate ? format(startDate, "dd-MM-yyyy") : <span>From Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={(date) => { setStartDate(date); setIsStartDatePickerOpen(false); }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">To Date</label>
-              <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal border-gray-200",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
-                    {endDate ? format(endDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={(date) => {
-                      setEndDate(date);
-                      setIsEndDatePickerOpen(false);
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+              {/* To Date */}
+              <div className="relative w-full sm:w-40">
+                <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !endDate && "text-muted-foreground")}
+                    >
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{endDate ? format(endDate, "dd-MM-yyyy") : <span>To Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={(date) => { setEndDate(date); setIsEndDatePickerOpen(false); }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              {/* Search */}
+              <div className="relative w-full sm:w-48">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Order #, Customer..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  placeholder="Search order #, customer..."
+                  className="w-full pl-8 pr-3 h-9 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white shadow-sm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card className="border-none shadow-sm overflow-hidden">
-        <CardHeader className="bg-white border-b border-gray-100">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-semibold flex items-center">
-              <RefreshCcw className="mr-2 h-5 w-5 text-blue-500" />
-              Reassigned History
-            </CardTitle>
-            <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 px-3 py-1">
-              {filteredOrders.length} Orders Found
-            </Badge>
+            {hasPermission('export_reassigned_orders_reports') && (
+              <Button 
+                onClick={() => setIsDownloadDialogOpen(true)} 
+                disabled={filteredOrders.length === 0 || isLoading}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 h-9 text-xs shrink-0 shadow-sm"
+              >
+                <Download className="mr-1.5 h-4 w-4" /> Download Report
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">

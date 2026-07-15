@@ -277,7 +277,7 @@ export async function GET(req: NextRequest) {
                 product: {
                     name: order.productName,
                     quantity: order.quantity,
-                    amount: order.amount ? order.amount / 100 : 0,
+                    amount: order.amount ? Math.round(order.amount / 100) : 0,
                 },
                 paymentMethod: order.paymentMethod,
                 paymentStatus: order.paymentStatus,

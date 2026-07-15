@@ -62,8 +62,15 @@ export async function POST(req: NextRequest) {
       paymentStatus: string;
       quantity: number;
       amount: number;
+      paidAmount: number;
+      codAdjustmentAmount: number | null;
     }>(
-      `SELECT o."id", o."customerId", o."paymentStatus", o."quantity", o."amount"
+      `SELECT o."id", o."customerId", o."paymentStatus", o."quantity", o."amount", o."codAdjustmentAmount",
+        COALESCE((
+          SELECT SUM(p."amount")::bigint
+          FROM "Payment" p
+          WHERE p."orderId" = o."id" AND p."status" = 'SUCCESS'
+        ), 0) as "paidAmount"
        FROM "Order" o
        WHERE o."id" = $1 AND o."customerId" = $2`,
       [orderId, customerId]
@@ -78,7 +85,9 @@ export async function POST(req: NextRequest) {
     }
 
     const order = orderRes.rows[0];
-    if (order.paymentStatus !== "PENDING" && order.paymentStatus !== "COD") {
+    const isAdditionalPayment = order.paymentStatus === "SUCCESS" && (order.codAdjustmentAmount || 0) > 0;
+
+    if (order.paymentStatus !== "PENDING" && order.paymentStatus !== "COD" && !isAdditionalPayment) {
       logger.log({ statusCode: 400 });
       return createSecureResponse(
         { success: false, message: "Payment already processed" },
@@ -239,6 +248,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const rawExpectedAmount = Math.max(0, Number(order.amount) - Number(order.paidAmount));
+    const expectedAmount = Math.round(rawExpectedAmount / 100) * 100;
+
+    if (expectedAmount === 0) {
+      return createSecureResponse(
+        { success: false, message: "Order is already fully paid" },
+        { status: 400 }
+      );
+    }
+
+    if (Math.abs(amount - expectedAmount) > 1) {
+      logger.log({ statusCode: 400 });
+      return createSecureResponse(
+        { success: false, message: `Payment amount mismatch. Expected ₹${expectedAmount / 100}` },
+        { status: 400 }
+      );
+    }
+
     // Create Razorpay Order
     // Receipt must be max 40 characters, so we'll use a shorter format
     const receipt = orderId.length > 30
@@ -246,7 +273,7 @@ export async function POST(req: NextRequest) {
       : `ord_${orderId}`;
 
     const razorpayOrder = await razorpay.orders.create({
-      amount: order.amount, // Amount in paise (INR) from DB
+      amount: expectedAmount, // Amount in paise (INR) from DB or codAdjustmentAmount
       currency: "INR",
       receipt: receipt.substring(0, 40), // Ensure max 40 chars
       notes: {

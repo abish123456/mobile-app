@@ -154,91 +154,82 @@ export default function ProductSalesReportPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Product Sales Report</h1>
-          <p className="text-gray-500">View taken, sales, and return quantities per product</p>
-        </div>
-        {!isLoading && data.length > 0 && (
-          <Button onClick={handleDownloadExcel} className="bg-green-600 hover:bg-green-700 shadow-sm transition-all hover:scale-[1.02]">
-            <FileDown className="h-4 w-4 mr-2" /> Download Excel
-          </Button>
-        )}
-      </div>
+      <Card className="border border-slate-200 shadow-sm bg-white">
+        <CardHeader className="border-b flex flex-col lg:flex-row lg:items-center justify-between gap-4 py-4">
+          <CardTitle className="text-lg font-semibold text-slate-800 shrink-0">Sales Breakdown</CardTitle>
 
-      <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm mb-6">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</Label>
-              <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200", !startDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {startDate ? format(startDate, "dd-MM-yyyy") : <span>Start Date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={startDate} onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }} initialFocus />
-                </PopoverContent>
-              </Popover>
+          {/* Filters & Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Start Date */}
+              <div className="relative w-full sm:w-36">
+                <Popover open={isStartDatePickerOpen} onOpenChange={setIsStartDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !startDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{startDate ? format(startDate, "dd-MM-yyyy") : <span>Start Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={startDate} onSelect={(date) => { if (date) { setStartDate(date); setIsStartDatePickerOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* End Date */}
+              <div className="relative w-full sm:w-36">
+                <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full h-9 justify-start text-left font-normal bg-white text-xs border-gray-200 shadow-sm", !endDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{endDate ? format(endDate, "dd-MM-yyyy") : <span>End Date</span>}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={endDate} onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Route */}
+              <div className="relative w-full sm:w-40">
+                <Select value={selectedRoute} onValueChange={setSelectedRoute}>
+                  <SelectTrigger className="w-full text-xs h-9 bg-white border-slate-200 shadow-sm">
+                    <SelectValue placeholder="Select Route" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Routes</SelectItem>
+                    {routes.map((route) => (
+                      <SelectItem key={route.id} value={route.id}>
+                        {route.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</Label>
-              <Popover open={isEndDatePickerOpen} onOpenChange={setIsEndDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-11 border-gray-200", !endDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                    {endDate ? format(endDate, "dd-MM-yyyy") : <span>End Date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={(date) => { if (date) { setEndDate(date); setIsEndDatePickerOpen(false); } }} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </div>
+            <Button variant="outline" size="sm" onClick={handleReset} className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 text-xs h-9 shrink-0 px-3">
+              Reset
+            </Button>
 
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Route</Label>
-              <Select value={selectedRoute} onValueChange={setSelectedRoute}>
-                <SelectTrigger className="w-full !h-11 border-gray-200">
-                  <SelectValue placeholder="Select Route" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Routes</SelectItem>
-                  {routes.map((route) => (
-                    <SelectItem key={route.id} value={route.id}>
-                      {route.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Button variant="outline" onClick={handleReset} className="w-full h-11 border-gray-200 hover:bg-gray-50 text-gray-600">
-                Reset Filters
+            {!isLoading && data.length > 0 && (
+              <Button onClick={handleDownloadExcel} className="bg-green-600 hover:bg-green-700 shadow-sm transition-all h-9 text-xs shrink-0">
+                <FileDown className="h-4 w-4 mr-1.5" /> Download Excel
               </Button>
-            </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
-
-      {error ? (
-        <div className="bg-red-50 text-red-500 p-4 rounded-md border border-red-200">
-          {error}
-        </div>
-      ) : isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Sales Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
+        </CardHeader>
+        <CardContent className="p-0">
+          {error ? (
+            <div className="p-6 text-center text-red-500">
+              {error}
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -254,7 +245,7 @@ export default function ProductSalesReportPage() {
                 <TableBody>
                   {data.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-gray-500">
+                      <TableCell colSpan={6} className="h-24 text-center text-gray-500">
                         No products found.
                       </TableCell>
                     </TableRow>
@@ -285,9 +276,9 @@ export default function ProductSalesReportPage() {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import AppHeader from '../../components/app/AppHeader';
 import BottomNav from '../../components/app/BottomNav';
+import AIChatWidget from '../../components/app/AIChatWidget';
 import { cn } from '../../lib/utils';
+import stedaxisLogo from '../../public/stedaxis_logo.png';
 
 export default function AppLayout({ children }) {
   const router = useRouter();
@@ -77,12 +79,16 @@ export default function AppLayout({ children }) {
       >
         {children}
         {(pathname === '/app/login' || pathname === '/app/profile') && (
-          <footer className="py-4 px-4 text-center text-gray-500 text-xs border-t border-gray-100 mt-auto">
-            Powered by <a href="https://www.stedaxis.com" target="_blank" rel="noopener noreferrer" className=" font-medium">STEDAXIS</a>
+          <footer className="py-4 px-6 text-center text-gray-500 text-sm border-t border-gray-200 flex items-center justify-center gap-1">
+            <span>Powered by</span>
+            <a href="https://www.stedaxis.com" target="_blank" rel="noopener noreferrer" className="font-medium inline-flex items-center">
+              <img src={stedaxisLogo.src} alt="STEDAXIS" className="h-3 w-auto" />
+            </a>
           </footer>
         )}
       </main>
       {!isNewUserFlow && pathname !== '/app/login' && <BottomNav />}
+      {!isNewUserFlow && pathname !== '/app/login' && <AIChatWidget />}
     </div>
   );
 }

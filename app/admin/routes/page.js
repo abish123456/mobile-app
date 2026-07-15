@@ -747,29 +747,36 @@ export default function RoutesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Assign Routes and Deliveries</h1>
-          <p className="text-muted-foreground">Manage delivery routes and assignments</p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          
-            <div className="flex items-center gap-4">
-              {hasPermission('set_hub_location') && (
-                <>
-                  <Button variant="outline" onClick={() => setShowShiftTimeDialog(true)} className="gap-2 text-indigo-500 border-indigo-200 hover:bg-indigo-50">
-                    <Clock className="h-4 w-4" />
-                    Shift Time
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowHubDialog(true)} className="gap-2 text-blue-500 border-blue-200 hover:bg-blue-50">
-                    <MapPin className="h-4 w-4" />
-                    Set Hub Location
-                  </Button>
-                </>
-              )}
-            <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+    <div className="space-y-4">
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
+      <Card>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <CardTitle>Routes List</CardTitle>
+            <CardDescription>
+              {routes.length} route{routes.length !== 1 ? 's' : ''} for {formatDate(selectedDate)}
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {hasPermission('set_hub_location') && (
+              <>
+                <Button variant="outline" onClick={() => setShowShiftTimeDialog(true)} className="gap-2 text-indigo-500 border-indigo-200 hover:bg-indigo-50">
+                  <Clock className="h-4 w-4" />
+                  Shift Time
+                </Button>
+                <Button variant="outline" onClick={() => setShowHubDialog(true)} className="gap-2 text-blue-500 border-blue-200 hover:bg-blue-50">
+                  <MapPin className="h-4 w-4" />
+                  Set Hub Location
+                </Button>
+              </>
+            )}
+            <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal")}>
                   <CalendarIcon className="mr-2 h-4 w-4" />
@@ -810,23 +817,6 @@ export default function RoutesPage() {
               </PopoverContent>
             </Popover>
           </div>
-
-        </div>
-      </div>
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Routes List</CardTitle>
-          <CardDescription>
-            {routes.length} route{routes.length !== 1 ? 's' : ''} for {formatDate(selectedDate)}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {(isLoading && routes.length === 0) ? (
@@ -1348,8 +1338,13 @@ export default function RoutesPage() {
                                   </div>
                                 )}
                               </div>
-                              <div className="text-[13px] font-medium text-slate-500">
+                              <div className="text-[13px] font-medium text-slate-500 flex items-center gap-2 flex-wrap">
                                 Qty: <span className="text-slate-900">{totalQty}</span> | <span className="font-bold text-slate-900">₹{Math.ceil(Number(order.amount))}</span>
+                                {(order.codAdjustmentAmount || 0) > 0 && (
+                                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                    +₹{Math.round(order.codAdjustmentAmount)} COD
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </TableCell>

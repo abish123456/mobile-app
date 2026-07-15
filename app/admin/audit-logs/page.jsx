@@ -204,8 +204,8 @@ const formatDiffValue = (key, val) => {
     }
     if (typeof val === 'boolean') {
         return (
-            <Badge 
-                variant="outline" 
+            <Badge
+                variant="outline"
                 className="bg-gray-50 text-gray-700 border-gray-200 rounded-full font-bold px-2 py-0.5 text-[10px] shadow-none"
             >
                 {val ? "Yes" : "No"}
@@ -295,19 +295,19 @@ const getInitials = (name) => {
 const isLinkGeneratedEvent = (log) => {
     if (!log) return false;
     const desc = log.description?.toLowerCase() || '';
-    return log.action === 'TOKEN_GENERATED' || 
-           log.newData?.action === 'TOKEN_GENERATED' ||
-           desc.includes('generated new delivery tracking link') ||
-           desc.includes('generated route link');
+    return log.action === 'TOKEN_GENERATED' ||
+        log.newData?.action === 'TOKEN_GENERATED' ||
+        desc.includes('generated new delivery tracking link') ||
+        desc.includes('generated route link');
 };
 
 const isLinkCopiedEvent = (log) => {
     if (!log) return false;
     const desc = log.description?.toLowerCase() || '';
-    return log.newData?.action === 'TOKEN_COPIED' || 
-           desc.includes('copied delivery tracking link') ||
-           desc.includes('copied tracking link') ||
-           desc.includes('copied route link');
+    return log.newData?.action === 'TOKEN_COPIED' ||
+        desc.includes('copied delivery tracking link') ||
+        desc.includes('copied tracking link') ||
+        desc.includes('copied route link');
 };
 
 const isLinkEvent = (log) => {
@@ -428,8 +428,8 @@ export default function AuditLogsPage() {
             }
             const isHour = selectedLog?.entityId === 'SAME_DAY_CUTOFF_HOUR';
             // We only have one part (hour or minute), display as partial time
-            const oldTime = oldVal !== undefined ? (isHour ? `${String(oldVal).padStart(2,'0')}:__` : `__:${String(oldVal).padStart(2,'0')}`) : null;
-            const newTime = newVal !== undefined ? (isHour ? `${String(newVal).padStart(2,'0')}:__` : `__:${String(newVal).padStart(2,'0')}`) : null;
+            const oldTime = oldVal !== undefined ? (isHour ? `${String(oldVal).padStart(2, '0')}:__` : `__:${String(oldVal).padStart(2, '0')}`) : null;
+            const newTime = newVal !== undefined ? (isHour ? `${String(newVal).padStart(2, '0')}:__` : `__:${String(newVal).padStart(2, '0')}`) : null;
             if (oldVal === newVal || (oldVal !== undefined && newVal !== undefined && String(oldVal) === String(newVal))) {
                 return <div className="text-center p-6 text-gray-500 bg-gray-50 rounded-md border border-gray-100">No change recorded — value remained the same.</div>;
             }
@@ -437,9 +437,9 @@ export default function AuditLogsPage() {
                 <div className="space-y-1.5 p-2">
                     <div className="flex flex-wrap items-center gap-1.5 text-gray-700 py-0.5">
                         <span className="font-semibold text-gray-800">Cut Off {isHour ? 'Hour' : 'Minute'} :</span>
-                        <span className="text-gray-600">{oldVal !== undefined ? <span className="text-gray-800">{String(oldVal).padStart(2,'0')}</span> : <span className="text-gray-400 italic">not set</span>}</span>
+                        <span className="text-gray-600">{oldVal !== undefined ? <span className="text-gray-800">{String(oldVal).padStart(2, '0')}</span> : <span className="text-gray-400 italic">not set</span>}</span>
                         <span className="text-gray-400 font-medium px-0.5">→</span>
-                        <span className="font-semibold text-gray-800">{String(newVal).padStart(2,'0')}</span>
+                        <span className="font-semibold text-gray-800">{String(newVal).padStart(2, '0')}</span>
                     </div>
                 </div>
             );
@@ -598,10 +598,10 @@ export default function AuditLogsPage() {
                 adminFetch('/api/admin/admins'),
                 adminFetch('/api/admin/delivery-boys')
             ]);
-            
+
             const adminsData = await adminsRes.json();
             const staffData = await staffRes.json();
-            
+
             let combined = [];
             if (adminsData.success && adminsData.admins) {
                 combined = [...combined, ...adminsData.admins.map(a => ({ ...a, _type: 'ADMIN' }))];
@@ -724,10 +724,10 @@ export default function AuditLogsPage() {
 
     return (
         <div className="space-y-6">
-            <div>
+            {/* <div>
                 <h1 className="text-3xl font-bold">Audit Logs</h1>
                 <p className="text-muted-foreground">Monitor system events and order history</p>
-            </div>
+            </div> */}
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                 <TabsList className="w-full justify-start rounded-none border-b border-gray-200 bg-transparent p-0 h-auto gap-6 mb-6">
@@ -858,116 +858,116 @@ export default function AuditLogsPage() {
                 <TabsContent value="admin">
                     <Card className="border border-gray-100 rounded-2xl shadow-xs overflow-hidden bg-white">
                         <CardContent className="p-6">
-                            {/* Filter Header Card */}
-                            <div className="flex items-start gap-4 mb-6">
+                            {/* Filter Header & Dropdown Selectors */}
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Admin Logs</h3>
                                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Refine results by event type and admin.</p>
                                 </div>
-                            </div>
 
-                            {/* Dropdown Selectors */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                <Select
-                                    value={selectedCategory}
-                                    onValueChange={(value) => {
-                                        setSelectedCategory(value);
-                                        setSelectedEventFilter('all');
-                                        setAdminPage(1);
-                                    }}
-                                >
-                                    <SelectTrigger className="flex !h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-xs transition-colors hover:bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left font-normal">
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <LayoutGrid className="w-5 h-5 text-gray-400 shrink-0" />
-                                            <span className="font-semibold text-gray-700 shrink-0">Resource</span>
-                                            <span className="text-gray-600 truncate">{CATEGORIES[selectedCategory] || 'All Resources'}</span>
-                                        </div>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Object.entries(CATEGORIES).map(([value, label]) => (
-                                            <SelectItem key={value} value={value}>
-                                                {label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                <Select
-                                    value={selectedEventFilter}
-                                    onValueChange={(value) => {
-                                        setSelectedEventFilter(value);
-                                        setAdminPage(1);
-                                    }}
-                                    disabled={selectedCategory === 'all'}
-                                >
-                                    <SelectTrigger className="flex !h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-xs transition-colors hover:bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left font-normal disabled:opacity-50 disabled:bg-gray-50/50 disabled:cursor-not-allowed">
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <Filter className="w-5 h-5 text-gray-400 shrink-0" />
-                                            <span className="font-semibold text-gray-700 shrink-0">Event</span>
-                                            <span className="text-gray-600 truncate">
-                                                {EVENT_OPTIONS_BY_CATEGORY[selectedCategory]?.[selectedEventFilter] || 'All Events'}
-                                            </span>
-                                        </div>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Object.entries(EVENT_OPTIONS_BY_CATEGORY[selectedCategory] || {}).map(([value, label]) => (
-                                            <SelectItem key={value} value={value}>
-                                                {label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                <Select
-                                    value={selectedAdminFilter}
-                                    onValueChange={(value) => {
-                                        setSelectedAdminFilter(value);
-                                        setAdminPage(1);
-                                    }}
-                                >
-                                    <SelectTrigger className="flex !h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-xs transition-colors hover:bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left font-normal">
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <User className="w-5 h-5 text-gray-400 shrink-0" />
-                                            <span className="font-semibold text-gray-700 shrink-0">Admin</span>
-                                            <span className="text-gray-600 truncate">
-                                                {selectedAdminFilter === 'all'
-                                                    ? 'All Actors'
-                                                    : (admins.find(a => a.id === selectedAdminFilter)?.name || admins.find(a => a.id === selectedAdminFilter)?.username || 'All Actors')}
-                                            </span>
-                                        </div>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Actors</SelectItem>
-                                        
-                                        <SelectGroup>
-                                            <SelectLabel>Admins</SelectLabel>
-                                            {admins.filter(a => a._type === 'ADMIN').map((admin) => (
-                                                <SelectItem key={admin.id} value={admin.id}>
-                                                    {admin.name || admin.username}
+                                {/* Dropdown Selectors */}
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 w-full lg:w-auto lg:min-w-[750px]">
+                                    <Select
+                                        value={selectedCategory}
+                                        onValueChange={(value) => {
+                                            setSelectedCategory(value);
+                                            setSelectedEventFilter('all');
+                                            setAdminPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="flex !h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-xs transition-colors hover:bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left font-normal">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <LayoutGrid className="w-5 h-5 text-gray-400 shrink-0" />
+                                                <span className="font-semibold text-gray-700 shrink-0">Resource</span>
+                                                <span className="text-gray-600 truncate">{CATEGORIES[selectedCategory] || 'All Resources'}</span>
+                                            </div>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Object.entries(CATEGORIES).map(([value, label]) => (
+                                                <SelectItem key={value} value={value}>
+                                                    {label}
                                                 </SelectItem>
                                             ))}
-                                        </SelectGroup>
-                                        
-                                        <SelectGroup>
-                                            <SelectLabel>Delivery Staff</SelectLabel>
-                                            {admins.filter(a => a._type === 'STAFF').map((staff) => (
-                                                <SelectItem key={staff.id} value={staff.id}>
-                                                    {staff.name || staff.username}
+                                        </SelectContent>
+                                    </Select>
+
+                                    <Select
+                                        value={selectedEventFilter}
+                                        onValueChange={(value) => {
+                                            setSelectedEventFilter(value);
+                                            setAdminPage(1);
+                                        }}
+                                        disabled={selectedCategory === 'all'}
+                                    >
+                                        <SelectTrigger className="flex !h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-xs transition-colors hover:bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left font-normal disabled:opacity-50 disabled:bg-gray-50/50 disabled:cursor-not-allowed">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <Filter className="w-5 h-5 text-gray-400 shrink-0" />
+                                                <span className="font-semibold text-gray-700 shrink-0">Event</span>
+                                                <span className="text-gray-600 truncate">
+                                                    {EVENT_OPTIONS_BY_CATEGORY[selectedCategory]?.[selectedEventFilter] || 'All Events'}
+                                                </span>
+                                            </div>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Object.entries(EVENT_OPTIONS_BY_CATEGORY[selectedCategory] || {}).map(([value, label]) => (
+                                                <SelectItem key={value} value={value}>
+                                                    {label}
                                                 </SelectItem>
                                             ))}
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
+                                        </SelectContent>
+                                    </Select>
 
-                                <Button
-                                    variant="outline"
-                                    onClick={handleResetFilters}
-                                    disabled={selectedCategory === 'all' && selectedEventFilter === 'all' && selectedAdminFilter === 'all'}
-                                    className="flex !h-12 w-full items-center justify-center rounded-xl border border-gray-200 bg-white dark:bg-gray-950 px-4 py-3 text-sm text-gray-500 hover:text-indigo-600 hover:bg-indigo-50/30 font-semibold transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed gap-2"
-                                >
-                                    <RotateCcw className="w-4 h-4 text-gray-500 shrink-0" />
-                                    <span>Reset Filters</span>
-                                </Button>
+                                    <Select
+                                        value={selectedAdminFilter}
+                                        onValueChange={(value) => {
+                                            setSelectedAdminFilter(value);
+                                            setAdminPage(1);
+                                        }}
+                                    >
+                                        <SelectTrigger className="flex !h-12 w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-xs transition-colors hover:bg-gray-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-left font-normal">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <User className="w-5 h-5 text-gray-400 shrink-0" />
+                                                <span className="font-semibold text-gray-700 shrink-0">Admin</span>
+                                                <span className="text-gray-600 truncate">
+                                                    {selectedAdminFilter === 'all'
+                                                        ? 'All Actors'
+                                                        : (admins.find(a => a.id === selectedAdminFilter)?.name || admins.find(a => a.id === selectedAdminFilter)?.username || 'All Actors')}
+                                                </span>
+                                            </div>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Actors</SelectItem>
+
+                                            <SelectGroup>
+                                                <SelectLabel>Admins</SelectLabel>
+                                                {admins.filter(a => a._type === 'ADMIN').map((admin) => (
+                                                    <SelectItem key={admin.id} value={admin.id}>
+                                                        {admin.name || admin.username}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+
+                                            <SelectGroup>
+                                                <SelectLabel>Delivery Staff</SelectLabel>
+                                                {admins.filter(a => a._type === 'STAFF').map((staff) => (
+                                                    <SelectItem key={staff.id} value={staff.id}>
+                                                        {staff.name || staff.username}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        </SelectContent>
+                                    </Select>
+
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleResetFilters}
+                                        disabled={selectedCategory === 'all' && selectedEventFilter === 'all' && selectedAdminFilter === 'all'}
+                                        className="flex !h-12 w-full items-center justify-center rounded-xl border border-gray-200 bg-white dark:bg-gray-950 px-4 py-3 text-sm text-gray-500 hover:text-indigo-600 hover:bg-indigo-50/30 font-semibold transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed gap-2"
+                                    >
+                                        <RotateCcw className="w-4 h-4 text-gray-500 shrink-0" />
+                                        <span>Reset Filters</span>
+                                    </Button>
+                                </div>
                             </div>
 
                             {isLoadingAdmin ? (
@@ -1021,12 +1021,12 @@ export default function AuditLogsPage() {
                                                                 <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase shadow-none">
                                                                     {ENTITY_LABELS[log.entity] || log.entity}
                                                                 </Badge>
-                                                                {log.targetName && 
-                                                                    !isRedistributionEvent(log) && 
+                                                                {log.targetName &&
+                                                                    !isRedistributionEvent(log) &&
                                                                     log.entityId !== 'CUT_OFF_TIME' &&
                                                                     !['SERVICE_ROUTE', 'SERVICE_AREA', 'PRODUCT', 'DELIVERY_BOY', 'NOT_DELIVERED_REASON'].includes(log.entity) && (
-                                                                    <span className="text-xs text-gray-700 font-semibold text-center">{log.targetName}</span>
-                                                                )}
+                                                                        <span className="text-xs text-gray-700 font-semibold text-center">{log.targetName}</span>
+                                                                    )}
                                                                 {log.orderNumber && (
                                                                     <span className="text-xs text-gray-600 font-medium text-center">
                                                                         #{log.orderNumber}
@@ -1422,10 +1422,10 @@ export default function AuditLogsPage() {
                                     return selectedLog.targetName && selectedLog.entity !== 'ORDER' && selectedLog.entity !== 'CUSTOMER' && selectedLog.entityId !== 'CUT_OFF_TIME' && (
                                         <div>
                                             <span className="font-semibold text-gray-700">
-                                                {selectedLog.entity === 'ROUTE' || selectedLog.entity === 'SERVICE_ROUTE' 
-                                                    ? 'Route Name' 
-                                                    : selectedLog.entity === 'SERVICE_AREA' 
-                                                        ? 'Area Name' 
+                                                {selectedLog.entity === 'ROUTE' || selectedLog.entity === 'SERVICE_ROUTE'
+                                                    ? 'Route Name'
+                                                    : selectedLog.entity === 'SERVICE_AREA'
+                                                        ? 'Area Name'
                                                         : 'Target'}
                                                 :
                                             </span>{' '}

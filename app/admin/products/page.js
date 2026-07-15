@@ -304,50 +304,33 @@ export default function ProductsPage() {
   );
 
   return (
-    <div className="space-y-6 ">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Products</h1>
-          <p className="text-muted-foreground">Manage products and items</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* <div className="hidden sm:flex flex-col items-end mr-2">
-            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Same-Day Cut-off</span>
-            <span className="text-sm font-semibold text-primary">
-              {(() => {
-                const h = parseInt(cutoffHour);
-                const m = parseInt(cutoffMinute);
-                const ampm = h >= 12 ? 'PM' : 'AM';
-                const displayH = h % 12 || 12;
-                const displayM = m.toString().padStart(2, '0');
-                return `${displayH}:${displayM} ${ampm}`;
-              })()}
-            </span>
-          </div> */}
-          {hasPermission('adjust_product_cutoff') && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCutoffDialog(true)}
-              className="h-9 border-primary/20 hover:bg-primary/5"
-            >
-              <Clock className="h-4 w-4 mr-2 text-primary" />
-              Adjust Cut-off
-            </Button>
-          )}
-          {hasPermission('create_products') && (
-            <Button onClick={handleAdd} className="h-9">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Product
-            </Button>
-          )}
-        </div>
-      </div>
-
-
-
-
+    <div className="space-y-4 ">
       <Card>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
+          <div>
+            <CardTitle>Products List</CardTitle>
+            <CardDescription>Manage products and items</CardDescription>
+          </div>
+          <div className="flex items-center gap-3">
+            {hasPermission('adjust_product_cutoff') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCutoffDialog(true)}
+                className="h-9 border-primary/20 hover:bg-primary/5"
+              >
+                <Clock className="h-4 w-4 mr-2 text-primary" />
+                Adjust Cut-off
+              </Button>
+            )}
+            {hasPermission('create_products') && (
+              <Button onClick={handleAdd} className="h-9">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
+            )}
+          </div>
+        </CardHeader>
         <CardContent>
           {(isLoading && products.length === 0) ? (
             <div className="flex items-center justify-center py-12">
@@ -368,7 +351,7 @@ export default function ProductsPage() {
               )}
             </div>
           ) : (
-            <div className={`rounded-md border mt-5 transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`rounded-md border transition-opacity ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
@@ -400,23 +383,23 @@ export default function ProductsPage() {
                       </TableCell>
                       {(hasPermission('edit_products') || hasPermission('delete_products')) && (
                         <TableCell className="text-center">
-                          <div>
+                          <div className="flex items-center justify-center gap-2">
                             {hasPermission('edit_products') && (
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon-xs"
                                 onClick={() => handleEdit(product)}
                               >
-                                <Edit className="h-4 w-4" />
+                                <Edit className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {hasPermission('delete_products') && (
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon-xs"
                                 onClick={() => handleDelete(product)}
                               >
-                                {/* <Trash2 className="h-4 w-4 text-destructive" /> */}
+                                {/* <Trash2 className="h-3.5 w-3.5 text-destructive" /> */}
                               </Button>
                             )}
                           </div>

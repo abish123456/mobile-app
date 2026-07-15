@@ -14,7 +14,10 @@ export function calculateTotal(cart) {
   }, 0);
 }
 
-export default function OrderSummary({ cart, slot, onSlotChange, slotError, paymentType, subtotal: propSubtotal, gst: propGst, depositInfo }) {
+import { Checkbox } from '../ui/checkbox';
+import { Label } from '../ui/label';
+
+export default function OrderSummary({ cart, slot, onSlotChange, slotError, paymentType, subtotal: propSubtotal, gst: propGst, depositInfo, customer, useOrderWallet, setUseOrderWallet, appliedWalletAmount, setAppliedWalletAmount }) {
   const [isEditingDate, setIsEditingDate] = useState(false);
   const itemTotal = propSubtotal ?? calculateTotal(cart || []);
   const totalQuantity = cart?.reduce((sum, item) => {
@@ -27,6 +30,21 @@ export default function OrderSummary({ cart, slot, onSlotChange, slotError, paym
   const gst = propGst ?? (itemTotal * 0.05);
   const netDeposit = depositInfo?.toPay || 0;
   const grandTotal = itemTotal + gst + netDeposit;
+  const orderWalletAvailable = customer?.orderWalletBalance || 0;
+  const maxWalletDeduction = Math.min(orderWalletAvailable, grandTotal);
+
+  let orderWalletApplied = 0;
+  if (useOrderWallet) {
+    if (appliedWalletAmount !== undefined && appliedWalletAmount !== '') {
+      const parsedAmount = parseFloat(appliedWalletAmount);
+      if (!isNaN(parsedAmount) && parsedAmount >= 0) {
+        orderWalletApplied = Math.min(parsedAmount, maxWalletDeduction);
+      }
+    } else {
+      orderWalletApplied = maxWalletDeduction;
+    }
+  }
+  const finalTotalToPay = grandTotal - orderWalletApplied;
 
   const getFormattedDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -114,9 +132,85 @@ export default function OrderSummary({ cart, slot, onSlotChange, slotError, paym
             </div>
           )}
 
+          {orderWalletAvailable > 0 && (
+            <div className="border-t pt-3 space-y-2 pb-2 border-primary/20">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="use-wallet" className="text-sm font-semibold cursor-pointer flex items-center gap-1.5">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  Use Order Wallet Balance (₹{orderWalletAvailable.toFixed(2)})
+                </Label>
+                <Checkbox
+                  id="use-wallet"
+                  checked={useOrderWallet}
+                  onCheckedChange={(checked) => {
+                    setUseOrderWallet(checked);
+                    if (checked) {
+                      setAppliedWalletAmount(maxWalletDeduction.toFixed(2));
+                    } else {
+                      setAppliedWalletAmount('');
+                    }
+                  }}
+                />
+              </div>
+              
+              {useOrderWallet && (
+                <div className="pl-6 pr-1 py-1.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex flex-col gap-1 flex-1">
+                    <span className="text-xs text-muted-foreground">Amount to use (Max: ₹{maxWalletDeduction.toFixed(2)}):</span>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500 font-medium">₹</span>
+                        <input
+                          type="number"
+                          value={appliedWalletAmount}
+                          placeholder={maxWalletDeduction.toFixed(2)}
+                          max={maxWalletDeduction}
+                          min={0}
+                          step="any"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setAppliedWalletAmount('');
+                              return;
+                            }
+                            const num = parseFloat(val);
+                            if (!isNaN(num)) {
+                              if (num > maxWalletDeduction) {
+                                setAppliedWalletAmount(maxWalletDeduction.toString());
+                              } else if (num < 0) {
+                                setAppliedWalletAmount('0');
+                              } else {
+                                setAppliedWalletAmount(val);
+                              }
+                            }
+                          }}
+                          className="w-full text-sm font-semibold pl-6 pr-3 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAppliedWalletAmount(maxWalletDeduction.toFixed(2))}
+                        className="h-8 px-3 text-xs font-semibold border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Use Max
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {orderWalletApplied > 0 && (
+            <div className="flex justify-between text-sm text-green-600 font-medium">
+              <span>Order Wallet Applied</span>
+              <span>-₹{orderWalletApplied.toFixed(2)}</span>
+            </div>
+          )}
+
           <div className="border-t pt-3 flex justify-between items-baseline pb-2">
             <span className="text-base font-bold">Total Amount</span>
-            <span className="text-xl font-black text-black">₹{Math.round(grandTotal)}</span>
+            <span className="text-xl font-black text-black">₹{Math.round(finalTotalToPay)}</span>
           </div>
 
           <div className="border-t pt-4 space-y-3">

@@ -560,15 +560,6 @@ export default function CustomerPricesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Customer Profile </h1>
-          <p className="text-muted-foreground">Manage customers and pricing</p>
-        </div>
-      </div>
-
-
-
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

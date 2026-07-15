@@ -19,6 +19,8 @@ export async function GET(
         const adminRes = await query(
             `SELECT a.id, a.email, a.username, a.name, a.active, a."createdAt", a."updatedAt",
                     db.phone as "deliveryBoyPhone",
+                    e."mobile" as "employeePhone",
+                    e."employeeCode", e."dateOfJoining", e."address" as "residentialAddress",
                     COALESCE(
                       (SELECT json_agg(json_build_object('id', ar.id, 'name', ar.name))
                        FROM "AdminRole" ar
@@ -28,6 +30,7 @@ export async function GET(
                     ) as "roles"
              FROM "Admin" a
              LEFT JOIN "DeliveryBoy" db ON db."adminId" = a.id
+             LEFT JOIN "Employee" e ON e."adminId" = a.id
              WHERE a.id = $1`,
             [id]
         );
@@ -73,10 +76,27 @@ export async function PUT(
         const roleIds = Array.isArray(body?.roleIds) ? body.roleIds : [];
         const active = body?.active ?? true;
         let phone = (body?.phone || "").toString().trim();
+        const employeeCode = (body?.employeeCode || "").toString().trim();
+        const dateOfJoining = body?.dateOfJoining ? new Date(body.dateOfJoining) : null;
+        const residentialAddress = (body?.residentialAddress || "").toString().trim();
+
+        if (!employeeCode) {
+            return NextResponse.json(
+                { success: false, message: "Employee Code / ID is required" },
+                { status: 400 }
+            );
+        }
 
         if (!username || !email) {
             return NextResponse.json(
                 { success: false, message: "Username and email are required" },
+                { status: 400 }
+            );
+        }
+
+        if (!phone || phone.length !== 10) {
+            return NextResponse.json(
+                { success: false, message: "A valid 10-digit phone number is required" },
                 { status: 400 }
             );
         }
@@ -109,6 +129,16 @@ export async function PUT(
                 { success: false, message: "Another admin with this username or email already exists" },
                 { status: 409 }
             );
+        }
+
+        if (employeeCode) {
+            const checkEmp = await query(`SELECT id FROM "Employee" WHERE "employeeCode" = $1 AND "adminId" != $2`, [employeeCode, id]);
+            if (checkEmp.rows.length > 0) {
+                return NextResponse.json(
+                    { success: false, message: "Another employee with this Employee Code already exists" },
+                    { status: 400 }
+                );
+            }
         }
 
         const now = new Date();
@@ -152,6 +182,48 @@ export async function PUT(
         
         const addedRoles = newRoleNames.filter(r => !oldRoleNames.includes(r));
         const removedRoles = oldRoleNames.filter(r => !newRoleNames.includes(r));
+
+        // Check if Employee already exists for this admin
+        const empCheck = await query(`SELECT id FROM "Employee" WHERE "adminId" = $1`, [id]);
+        if (empCheck.rows.length > 0) {
+            // Update existing Employee
+            await query(
+                `UPDATE "Employee" 
+                 SET "employeeCode" = $1, name = $2, mobile = $3, email = $4, address = $5, "dateOfJoining" = $6, active = $7, "updatedAt" = $8
+                 WHERE "adminId" = $9`,
+                [
+                    employeeCode || `EMP-${id.slice(0, 8).toUpperCase()}`,
+                    name || username,
+                    phone || '',
+                    email,
+                    residentialAddress || null,
+                    dateOfJoining || now,
+                    active,
+                    now,
+                    id
+                ]
+            );
+        } else if (employeeCode || dateOfJoining || residentialAddress) {
+            // Insert new Employee
+            const empId = crypto.randomUUID();
+            await query(
+                `INSERT INTO "Employee" (id, "employeeCode", name, mobile, email, address, "dateOfJoining", active, "adminId", "createdAt", "updatedAt")
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [
+                    empId,
+                    employeeCode || `EMP-${id.slice(0, 8).toUpperCase()}`,
+                    name || username,
+                    phone || '',
+                    email,
+                    residentialAddress || null,
+                    dateOfJoining || now,
+                    active,
+                    id,
+                    now,
+                    now
+                ]
+            );
+        }
 
         if (isDeliveryStaff && phone) {
             if (!phone.startsWith('+91')) {

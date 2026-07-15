@@ -204,11 +204,11 @@ export default function SupportContactsPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-end gap-4">
+        {/* <div>
           <h1 className="text-3xl font-bold">Support Contacts</h1>
           <p className="text-muted-foreground">Manage phone numbers and emails shown to customers</p>
-        </div>
+        </div> */}
 
         {hasPermission('create_support_contacts') && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
